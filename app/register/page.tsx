@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import LoginPage from "./LoginPageClient";
+import RegisterPage from "./RegisterPageClient";
 
 export const metadata: Metadata = {
-  title: "Login",
+  title: "Register",
 };
 
 export default function Page() {
-  return <LoginPage />;
+  return <RegisterPage />;
 }
