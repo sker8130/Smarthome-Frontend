@@ -3,14 +3,35 @@
 import Button from "@/components/ui/Button";
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { isTokenValid } from "@/lib/api";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // check token
+  useEffect(() => {
+    if (isTokenValid()) {
+      router.replace("/dashboard");
+    } else {
+      setChecking(false);
+    }
+  }, [router]);
+
+  if (checking) {
+    return (
+      <main className="flex h-screen items-center justify-center text-white bg-[var(--color-purple)]">
+        <p className="text-lg animate-pulse">Checking session...</p>
+      </main>
+    );
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,7 +49,12 @@ export default function LoginPage() {
       if (!res.ok) throw new Error("Failed to log in");
       const data = await res.json();
 
-      localStorage.setItem("token", data.access_token);
+      if (remember) {
+        localStorage.setItem("token", data.access_token);
+      } else {
+        sessionStorage.setItem("token", data.access_token);
+      }
+
       window.location.href = "/dashboard";
     } catch (err) {
       alert("Login failed. Please check your account or the server.");
@@ -36,7 +62,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   }
-
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[var(--color-purple)] p-6">
@@ -52,7 +77,7 @@ export default function LoginPage() {
       </div>
       <div className="pointer-events-none absolute inset-x-3 top-3 -z-10 h-[72%] rounded-3xl bg-[--primary]/90 md:inset-x-6 md:top-6" />
       <div className="pointer-events-none absolute -bottom-24 right-[-15%] -z-10 h-[42rem] w-[42rem] rounded-[55%] bg-[--primary] opacity-70 blur-2xl" />
-      
+
       <div className="mx-auto min-h-screen grid max-w-6xl grid-cols-1 items-center gap-10 md:grid-cols-2">
         {/* Banner */}
         <div className="hidden justify-center md:flex">

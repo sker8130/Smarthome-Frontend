@@ -11,17 +11,16 @@ export default function HomePage() {
       {/* NAVBAR */}
       <header className="flex items-center justify-between max-w-6xl mx-auto py-5 px-4">
         <div className="flex items-center gap-2">
-          <Image src="/public/HEHUB_logo1.png" alt="HEHub logo" width={40} height={40} />
-          <span className="text-xl font-semibold text-primary">HEHub</span>
+          <Image src="/HEHUB_logo1.png" alt="HEHub logo" width={150} height={150} />
         </div>
 
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+        <nav className="hidden md:flex items-center gap-8 text-2xl font-medium">
           <Link href="#" className="text-primary">Home</Link>
           <Link href="#feature" className="hover:text-primary">Features</Link>
           <Link href="#contact" className="hover:text-primary">Contact</Link>
           <Link href="/login" className="hover:text-primary">Login</Link>
           <Link
-            href="/signup"
+            href="/register"
             className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90"
           >
             Sign Up
@@ -57,12 +56,11 @@ export default function HomePage() {
           </div>
           <div className="flex justify-center md:justify-end">
             <Image
-              src="/hero-room.png"
+              src="/3droom.png"
               alt="3D home room"
               width={480}
               height={380}
               priority
-              className="rounded-2xl shadow-lg"
             />
           </div>
         </div>
