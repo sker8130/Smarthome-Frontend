@@ -25,13 +25,13 @@ export default function LoginPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("Đăng nhập thất bại");
+      if (!res.ok) throw new Error("Failed to log in");
       const data = await res.json();
 
       localStorage.setItem("token", data.access_token);
       window.location.href = "/dashboard";
     } catch (err) {
-      alert("Đăng nhập thất bại, kiểm tra lại tài khoản hoặc server.");
+      alert("Login failed. Please check your account or the server.");
     } finally {
       setLoading(false);
     }

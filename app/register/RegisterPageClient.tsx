@@ -51,10 +51,12 @@ export default function RegisterPage() {
       if (!res.ok)
         throw new Error(await res.text().catch(() => "Register failed"));
 
-      alert("Tạo tài khoản thành công! Hãy đăng nhập.");
+      alert("Account created successfully! Please log in");
       window.location.href = "/login";
     } catch (err) {
-      alert("Không thể đăng ký. Kiểm tra lại thông tin hoặc server.");
+      alert(
+        "Unable to register. Please verify your details or try again later."
+      );
     } finally {
       setLoading(false);
     }
@@ -76,7 +78,7 @@ export default function RegisterPage() {
       <div className="pointer-events-none absolute -bottom-24 right-[-15%] -z-10 h-[42rem] w-[42rem] rounded-[55%] bg-[--primary] opacity-70 blur-2xl" />
 
       <div className="mx-auto grid min-h-screen max-w-6xl grid-cols-1 items-center gap-10 md:grid-cols-2">
-        {/* banner trái */}
+        {/* banner */}
         <div className="hidden justify-center md:flex">
           <Image
             src="/dashboard_monitor.svg"
@@ -87,13 +89,12 @@ export default function RegisterPage() {
           />
         </div>
 
-        {/* card đăng ký */}
+        {/* card register */}
         <div className="z-10 mx-auto w-full max-w-md">
           <div className="rounded-2xl bg-white p-10 shadow-xl shadow-black/5 ring-1 ring-black/5">
             <h1 className="text-3xl font-semibold text-gray-800 ">Register</h1>
 
             <form onSubmit={onSubmit} className="mt-6 space-y-4">
-              {/* Username */}
               <Field
                 icon="user"
                 placeholder="Username"
@@ -101,7 +102,6 @@ export default function RegisterPage() {
                 onChange={setUsername}
               />
 
-              {/* First name */}
               <Field
                 icon="id"
                 placeholder="First name"
@@ -109,7 +109,6 @@ export default function RegisterPage() {
                 onChange={setFirstName}
               />
 
-              {/* Last name */}
               <Field
                 icon="id"
                 placeholder="Last name"
@@ -117,7 +116,6 @@ export default function RegisterPage() {
                 onChange={setLastName}
               />
 
-              {/* Email */}
               <Field
                 icon="mail"
                 placeholder="Email"
@@ -146,7 +144,7 @@ export default function RegisterPage() {
                 onChange={setConfirm}
                 toggleShow={() => setShow2((v) => !v)}
                 show={show2}
-                status={matchState} // <-- NEW
+                status={matchState}
               />
 
               {/* Messages */}
@@ -276,7 +274,7 @@ function Field({
         aria-invalid={status === "mismatch" ? true : undefined}
       />
 
-      {/* nút show/hide */}
+      {/* button show/hide */}
       {toggleShow && (
         <button
           type="button"
