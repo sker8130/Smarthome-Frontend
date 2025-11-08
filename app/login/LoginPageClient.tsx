@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { isTokenValid } from "@/lib/api";
+import Loader from "@/components/ui/Loader";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,17 +18,24 @@ export default function LoginPage() {
 
   // check token
   useEffect(() => {
-    if (isTokenValid()) {
-      router.replace("/dashboard");
-    } else {
-      setChecking(false);
-    }
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+
+    const timer = setTimeout(() => {
+      if (token) {
+        router.replace("/dashboard");
+      } else {
+        setChecking(false);
+      }
+    }, 1200);
+
+    return () => clearTimeout(timer);
   }, [router]);
 
   if (checking) {
     return (
-      <main className="flex h-screen items-center justify-center text-white bg-[var(--color-purple)]">
-        <p className="text-lg animate-pulse">Checking session...</p>
+      <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+        <Loader />
       </main>
     );
   }
