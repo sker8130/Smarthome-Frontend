@@ -1,7 +1,9 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 
-export default function test() {
+export default function HomePageClient() {
   return (
     <main className="min-h-screen bg-white">
       {/* HERO */}
@@ -94,7 +96,7 @@ export default function test() {
         </div>
       </div>
 
-      {/* FEATURE SECTION */}
+      {/* FEATURE */}
       <section
         id="feature"
         className="bg-white py-16 md:py-20 px-4 flex flex-col items-center"
