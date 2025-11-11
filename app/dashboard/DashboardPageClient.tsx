@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
+import { LineChart } from '@mui/x-charts/LineChart';
 
 type ApiDevice = {
   id: number | string;
@@ -23,6 +24,11 @@ const iconMap: Record<string, string> = {
   lightauto: "/icons/light-auto.gif",
   speaker: "/icons/speaker.png",
 };
+
+const temperatureData = [27.5, 28.1, 29.0, 0, 30.2, 31.0, 30.7];
+const temperatureX = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
+const lightData = [320, 560, 880, 1200, 200, 1450, 980];
+const lightX = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
 
 export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -48,10 +54,10 @@ export default function DashboardPage() {
               typeof d.isOn === "boolean"
                 ? d.isOn
                 : typeof d.on === "boolean"
-                ? d.on
-                : typeof d.status === "boolean"
-                ? d.status
-                : false;
+                  ? d.on
+                  : typeof d.status === "boolean"
+                    ? d.status
+                    : false;
 
             const keyGuess =
               id ||
@@ -63,10 +69,10 @@ export default function DashboardPage() {
               (d.name?.toLowerCase().includes("quạt")
                 ? iconMap.fan
                 : d.name?.toLowerCase().includes("loa")
-                ? iconMap.speaker
-                : d.name?.toLowerCase().includes("đèn")
-                ? iconMap.light
-                : "/icons/light.png");
+                  ? iconMap.speaker
+                  : d.name?.toLowerCase().includes("đèn")
+                    ? iconMap.light
+                    : "/icons/light.png");
 
             return { id, name: d.name ?? `Device ${id}`, icon, on };
           }) || [];
@@ -111,15 +117,15 @@ export default function DashboardPage() {
   const badge =
     ratio >= 1
       ? {
-          text: "Energy Limit",
-          color: "bg-red-100 text-red-700 border-red-200",
-        }
+        text: "Energy Limit",
+        color: "bg-red-100 text-red-700 border-red-200",
+      }
       : ratio >= 0.7
-      ? {
+        ? {
           text: "High Usage",
           color: "bg-yellow-100 text-yellow-700 border-yellow-200",
         }
-      : { text: "Normal", color: "bg-gray-100 text-gray-700 border-gray-200" };
+        : { text: "Normal", color: "bg-gray-100 text-gray-700 border-gray-200" };
 
   async function toggle(id: string, next?: boolean) {
     setBusyId(id);
@@ -223,15 +229,13 @@ export default function DashboardPage() {
                 onClick={() => (busyId ? null : toggle(d.id))}
                 disabled={busyId === d.id}
                 className={`inline-flex items-center rounded-full px-3 py-1 text-sm border transition
-                  ${
-                    d.on
-                      ? "bg-green-600 text-white border-green-600"
-                      : "bg-gray-100 text-gray-700 border-gray-200"
+                  ${d.on
+                    ? "bg-green-600 text-white border-green-600"
+                    : "bg-gray-100 text-gray-700 border-gray-200"
                   }
-                  ${
-                    busyId === d.id
-                      ? "opacity-60 cursor-not-allowed"
-                      : "hover:opacity-90"
+                  ${busyId === d.id
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:opacity-90"
                   }
                 `}
               >
@@ -260,6 +264,31 @@ export default function DashboardPage() {
           value={(dailyKwh * 3000).toLocaleString("vi-VN") + " đ"}
           sub="giả định 3.000đ/kWh"
         />
+      </section>
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-1">
+        <LineChart
+          xAxis={[{ data: temperatureX, scaleType: 'point' }]}
+          series={[
+            {
+              data: temperatureData,
+            },
+          ]}
+          height={300}
+        />
+        <p className="text-sm text-center">Nhiệt độ (°C)</p>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-1">
+        <LineChart
+          xAxis={[{ data: lightX, scaleType: 'point' }]}
+          series={[
+            {
+              data: lightData,
+            },
+          ]}
+          height={300}
+        />
+        <p className="text-sm text-center">Ánh sáng (Lux)</p>
       </section>
     </main>
   );
