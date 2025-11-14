@@ -84,8 +84,8 @@ export default function HomePageClient() {
 
             <div className="relative flex justify-center md:justify-end mt-5">
               <Image
-                src="/3droom.png"
-                alt="3D smart home"
+                src="/room.svg"
+                alt="3d home image"
                 width={500}
                 height={360}
                 className="drop-shadow-2xl"
