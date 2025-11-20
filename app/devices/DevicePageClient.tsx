@@ -21,12 +21,34 @@ export default function DevicePageClient() {
   const [editItem, setEditItem] = useState<ApiDevice | null>(null);
   const [addMode, setAddMode] = useState(false);
 
+  const [sortConfig, setSortConfig] = useState<{ key: keyof ApiDevice; direction: "asc" | "desc" } | null>(null);
+
   const [form, setForm] = useState({
     name: "",
     type: "",
     mqttTopic: "",
     description: "",
   });
+
+  const sortedDevices = [...devices];
+  if (sortConfig) {
+    sortedDevices.sort((a, b) => {
+      const aVal = a[sortConfig.key] ?? "";
+      const bVal = b[sortConfig.key] ?? "";
+
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function handleSort(key: keyof ApiDevice) {
+    if (sortConfig?.key === key) {
+      setSortConfig({ key, direction: sortConfig.direction === "asc" ? "desc" : "asc" });
+    } else {
+      setSortConfig({ key, direction: "asc" });
+    }
+  }
 
   // Load devices
   async function loadDevices() {
@@ -64,8 +86,8 @@ export default function DevicePageClient() {
     setEditItem(null);
     setForm({
       name: "",
-      type: "device",
-      mqttTopic: "",
+      type: "sensor",
+      mqttTopic: "27C45UV/feeds/V1",
       description: "",
     });
     setModalOpen(true);
@@ -136,18 +158,29 @@ export default function DevicePageClient() {
       </div>
 
       <table className="w-full border border-gray-300 text-sm">
-        <thead className="bg-gray-100">
+        <thead className="bg-green-600 text-white">
           <tr>
-            <th className="border p-2">ID</th>
-            <th className="border p-2">Name</th>
-            <th className="border p-2">Type</th>
-            <th className="border p-2">MQTT Topic</th>
-            <th className="border p-2">Description</th>
+            <th className="border p-2 cursor-pointer" onClick={() => handleSort("id")}>
+              ID {sortConfig?.key === "id" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+            </th>
+            <th className="border p-2 cursor-pointer" onClick={() => handleSort("name")}>
+              Name {sortConfig?.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+            </th>
+            <th className="border p-2 cursor-pointer" onClick={() => handleSort("type")}>
+              Type {sortConfig?.key === "type" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+            </th>
+            <th className="border p-2 cursor-pointer" onClick={() => handleSort("mqttTopic")}>
+              MQTT Topic {sortConfig?.key === "mqttTopic" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+            </th>
+            <th className="border p-2 cursor-pointer" onClick={() => handleSort("description")}>
+              Description {sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
+            </th>
             <th className="border p-2 w-32">Actions</th>
           </tr>
         </thead>
+
         <tbody>
-          {devices.map((d) => (
+          {sortedDevices.map((d) => (
             <tr key={d.id}>
               <td className="border p-2">{d.id}</td>
               <td className="border p-2">{d.name}</td>
@@ -230,7 +263,6 @@ export default function DevicePageClient() {
                 <option value="fan">Fan</option>
                 <option value="speaker">Speaker</option>
                 <option value="relay">Relay</option>
-                <option value="auto">Auto</option>
               </select>
 
               <select
