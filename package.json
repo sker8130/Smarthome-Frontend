@@ -12,6 +12,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^7.3.5",
     "@mui/x-charts": "^8.17.0",
+    "@tanstack/react-table": "^8.21.3",
     "next": "15.5.5",
     "react": "19.1.0",
     "react-dom": "19.1.0",
