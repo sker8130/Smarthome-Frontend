@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
-import { LineChart } from "@mui/x-charts/LineChart";
 import { io, Socket } from "socket.io-client";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+} from "recharts";
 
 type ApiDevice = {
   id: number | string;
@@ -65,16 +74,20 @@ export default function DashboardPage() {
       try {
         const res: any = await apiFetch("/devices");
         const list: ApiDevice[] = Array.isArray(res.data) ? res.data : [];
+
         const mapped: Device[] = list.map((d) => {
           const id = String(d.id);
+
           const on =
-            typeof d.isOn === "boolean"
-              ? d.isOn
-              : typeof d.on === "boolean"
-                ? d.on
-                : typeof d.status === "boolean"
-                  ? d.status
-                  : false;
+            d.type === "relay"
+              ? false // default
+              : typeof d.isOn === "boolean"
+                ? d.isOn
+                : typeof d.on === "boolean"
+                  ? d.on
+                  : typeof d.status === "boolean"
+                    ? d.status
+                    : false;
 
           const icon =
             d.type === "light"
@@ -83,7 +96,7 @@ export default function DashboardPage() {
                 ? iconMap.fan
                 : d.type === "speaker"
                   ? iconMap.speaker
-                  : "/icons/light.png"; // default
+                  : "/icons/light.png";
 
           return {
             id,
@@ -91,9 +104,10 @@ export default function DashboardPage() {
             icon,
             on,
             mqttTopic: d.mqttTopic,
-            type: d.type ?? "device"
+            type: d.type ?? "device",
           };
         });
+
 
         setDevices(mapped);
       } catch (err) {
@@ -118,9 +132,10 @@ export default function DashboardPage() {
       console.log("Connected WebSocket");
     });
 
-    socket.on("sensorData", (msg: { topic: string; value: number; time: string }) => {
+    socket.on("sensorData", (msg) => {
       const ts = new Date(msg.time).getTime();
 
+      // Cập nhật chart như cũ
       setDataMap((prev) => {
         const arr = prev[msg.topic] || [];
         return {
@@ -128,6 +143,19 @@ export default function DashboardPage() {
           [msg.topic]: [...arr.slice(-99), { time: ts, value: msg.value }],
         };
       });
+
+      // Update relay state
+      setDevices((prev) =>
+        prev.map((d) => {
+          if (d.type === "relay" && d.mqttTopic === msg.topic) {
+            return {
+              ...d,
+              on: msg.value === 1,
+            };
+          }
+          return d;
+        })
+      );
     });
 
     return () => {
@@ -177,29 +205,48 @@ export default function DashboardPage() {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {devices
           .filter((d) => d.type !== "sensor")
-          .map((d) => (
-            <article key={d.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between">
-                <img src={d.icon} className="h-10 w-10 object-contain" />
+          .map((d) => {
+            const isRelay = d.type === "relay";
 
-                <button
-                  onClick={() => toggle(d.id)}
-                  disabled={busyId === d.id}
-                  className={`rounded-full px-3 py-1 text-sm border ${d.on
-                    ? "bg-green-600 text-white border-green-600"
-                    : "bg-gray-100 text-gray-700 border-gray-200"
-                    }`}
-                >
-                  {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
-                </button>
-              </div>
+            return (
+              <article
+                key={d.id}
+                className="rounded-2xl border bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between">
+                  <img src={d.icon} className="h-10 w-10 object-contain" />
 
-              <h3 className="mt-3 text-base font-medium">{d.name}</h3>
-              <p className="mt-1 text-xs text-gray-500">
-                Topic: {d.mqttTopic || "—"}
-              </p>
-            </article>
-          ))}
+                  {/* Relay button */}
+                  {isRelay ? (
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${d.on
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                    >
+                      {d.on ? "ON" : "OFF"}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => toggle(d.id)}
+                      disabled={busyId === d.id}
+                      className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${d.on
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                    >
+                      {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
+                    </button>
+                  )}
+                </div>
+
+                <h3 className="mt-3 text-base font-medium">{d.name}</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  Topic: {d.mqttTopic || "—"}
+                </p>
+              </article>
+            );
+          })}
       </section>
 
       {/* SENSOR CHARTS */}
@@ -209,16 +256,67 @@ export default function DashboardPage() {
           .map((d) => {
             const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
 
-            const xAxis = arr.map((p) => new Date(p.time).toLocaleTimeString());
-            const series = arr.map((p) => p.value);
+            const chartData = arr.map((p) => ({
+              time: new Date(p.time).toLocaleTimeString(),
+              value: p.value,
+            }));
+
+            // Current value
+            const latest = arr.length > 0 ? arr[arr.length - 1].value : null;
+
+            // Temperature logic
+            const isTemperature = d.name === "Temperature";
+            const isDanger = isTemperature && latest !== null && latest >= 28;
+
+            // Dynamic Y domain
+            const values = arr.map((p) => p.value);
+            const minY = values.length > 0 ? Math.min(...values) : 0;
+            const maxY = values.length > 0 ? Math.max(...values) : 10;
+
+            // Chart color (normal or danger)
+            const lineColor = isDanger ? "#d60000" : "#245bcbff";
+            const textColor = isDanger ? "text-red-600" : "text-blue-600";
 
             return (
-              <div key={d.id} className="border rounded-xl p-4 bg-white shadow-sm">
-                <LineChart
-                  xAxis={[{ data: xAxis, scaleType: "point" }]}
-                  series={[{ data: series }]}
-                  height={300}
-                />
+              <div
+                key={d.id}
+                className="border rounded-xl p-4 bg-white shadow-sm"
+              >
+                {/* Current value */}
+                <div
+                  className={`text-lg font-semibold mb-2 text-center ${textColor}`}
+                >
+                  {latest !== null ? `Value: ${latest}` : "No data."}
+                </div>
+
+                <div style={{ width: "100%", height: 300 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[minY - 1, maxY + 1]} />
+                      <Tooltip />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        fill={isDanger ? "#ff00002a" : "#8884d825"}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
                 <p className="text-sm text-center mt-2">{d.name}</p>
               </div>
             );
