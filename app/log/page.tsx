@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import DashboardTestPage from "./testClient";
+import LogPageClient from "./LogPageClient";
 
 export const metadata: Metadata = {
   title: "Dashboard",
 };
 
 export default function Page() {
-  return <DashboardTestPage />;
+  return <LogPageClient />;
 }

@@ -1,5 +1,8 @@
-"use client";
 
+//Test UI chart with fake realtime data
+
+"use client";
+const USE_FAKE_REALTIME = true;
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
@@ -68,7 +71,7 @@ function SensorTooltip({ active, payload, label }: SensorTooltipProps) {
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardTestPage() {
   const [token, setToken] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,43 +149,66 @@ export default function DashboardPage() {
   // ======================================
   // Connect to WebSocket and realtime data
   // ======================================
+  // ======================================================
+  // 🔥 REAL WS MODE + FAKE REALTIME DEMO MODE
+  // ======================================================
   useEffect(() => {
-    if (!token) return;
+    if (!token && !USE_FAKE_REALTIME) return;
 
+    // ---------------------------------------------
+    // 🟣 FAKE REALTIME MODE
+    // ---------------------------------------------
+    if (USE_FAKE_REALTIME) {
+      const topics = devices
+        .filter((d) => d.type === "sensor")
+        .map((d) => d.mqttTopic)
+        .filter(Boolean);
+
+      if (topics.length === 0) return;
+
+      const interval = setInterval(() => {
+        topics.forEach((topic) => {
+          const fakeValue = Number((20 + Math.random() * 10).toFixed(1));
+
+          const msg = {
+            topic: topic!,
+            time: new Date().toISOString(),
+            value: fakeValue,
+          };
+
+          // Push fake value to dataMap
+          const ts = new Date(msg.time).getTime();
+
+          setDataMap((prev) => {
+            const arr = prev[msg.topic] || [];
+            const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+            return { ...prev, [msg.topic]: nextArr };
+          });
+        });
+      }, 1800); // mỗi 1.8 giây tạo dữ liệu mới
+
+      return () => clearInterval(interval);
+    }
+
+    // ---------------------------------------------
+    // 🟢 REAL BACKEND WEBSOCKET MODE
+    // ---------------------------------------------
     const socket: Socket = io("http://localhost:3000", {
       auth: { token },
     });
 
-    socket.on("connect", () => console.log("Connected WebSocket"));
+    socket.on("sensorData", (msg) => {
+      const ts = new Date(msg.time).getTime();
 
-    socket.on(
-      "sensorData",
-      (msg: { topic: string; time: string; value: number }) => {
-        const ts = new Date(msg.time).getTime();
+      setDataMap((prev) => {
+        const arr = prev[msg.topic] || [];
+        const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+        return { ...prev, [msg.topic]: nextArr };
+      });
+    });
 
-        setDataMap((prev) => {
-          const arr = prev[msg.topic] || [];
-          const nextArr: SensorPoint[] = [
-            ...arr.slice(-99),
-            { time: ts, value: msg.value },
-          ];
-          return { ...prev, [msg.topic]: nextArr };
-        });
-
-        setDevices((prev) =>
-          prev.map((d) =>
-            d.type === "relay" && d.mqttTopic === msg.topic
-              ? { ...d, on: msg.value === 1 }
-              : d
-          )
-        );
-      }
-    );
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [token]);
+    return () => socket.disconnect();
+  }, [token, devices]);
 
   // =====================================
   // Toggle devices
@@ -233,7 +259,6 @@ export default function DashboardPage() {
     <div className="container bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
       <main className="mx-auto max-w-5xl p-6 space-y-8">
-
         {/* DEVICES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {devices
