@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import Loader from "@/components/ui/Loader";
 
 type Device = {
   id: number;
@@ -42,6 +43,13 @@ type SortConfig = {
 export default function LogPageClient() {
   const [logs, setLogs] = useState<DeviceLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uiLoading, setUiLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setUiLoading(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
@@ -122,12 +130,12 @@ export default function LogPageClient() {
       second: "2-digit",
     });
 
-  if (loading) {
+  if (uiLoading || loading) {
     return (
       <div className="min-h-screen bg-[#f4f5ff]">
         <DashboardHeader />
-        <main className="mx-auto max-w-6xl p-6">
-          <p className="text-gray-700">Loading logs...</p>
+        <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+          <Loader />
         </main>
       </div>
     );

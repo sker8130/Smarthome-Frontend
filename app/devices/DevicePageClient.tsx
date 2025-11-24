@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import Loader from "@/components/ui/Loader";
 
 type ApiDevice = {
   id: number;
@@ -152,16 +153,24 @@ export default function DevicePageClient() {
     }
   }
 
-  if (loading) {
+  const [uiLoading, setUiLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setUiLoading(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (uiLoading || loading) {
     return (
       <div className="min-h-screen bg-[#f4f5ff]">
         <DashboardHeader />
-        <main className="mx-auto max-w-6xl p-6">
-          <p className="text-gray-700">Loading devices...</p>
+        <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+          <Loader />
         </main>
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-[#f4f5ff]">

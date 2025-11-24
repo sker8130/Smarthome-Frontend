@@ -16,6 +16,7 @@ import {
   Tooltip,
   Area,
 } from "recharts";
+import Loader from "@/components/ui/Loader";
 
 type ApiDevice = {
   id: number | string;
@@ -191,13 +192,19 @@ export default function DashboardPage() {
       setBusyId(null);
     }
   }
+  const [uiLoading, setUiLoading] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    const t = setTimeout(() => setUiLoading(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (uiLoading || loading) {
     return (
       <div className="min-h-screen bg-[var(--color-purple)] text-white">
         <DashboardHeader />
-        <main className="mx-auto my-auto max-w-5xl p-6">
-          <p>Loading...</p>
+        <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+          <Loader />
         </main>
       </div>
     );
