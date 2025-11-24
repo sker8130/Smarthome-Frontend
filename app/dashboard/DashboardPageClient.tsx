@@ -10,7 +10,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   Area,
 } from "recharts";
 
@@ -49,8 +48,7 @@ const iconMap: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const token = getAuthToken();
-
+  const [token, setToken] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -58,18 +56,24 @@ export default function DashboardPage() {
   // Fetch data realtime from back-end
   const [dataMap, setDataMap] = useState<Record<string, SensorPoint[]>>({});
 
-  // Check JWT and redirect if invalid
+  // ==========================================
+  // Get client token
+  // ==========================================
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      if (typeof window !== "undefined") window.location.href = "/login";
+    const t = getAuthToken();
+    if (!t) {
+      window.location.href = "/login";
+      return;
     }
+    setToken(t);
   }, []);
 
-  // =================================
-  // Fetch all devices
-  // =================================
+  // ==========================================
+  // Fetch devices after get token
+  // ==========================================
   useEffect(() => {
+    if (!token) return;
+
     (async () => {
       try {
         const res: any = await apiFetch("/devices");
@@ -78,9 +82,10 @@ export default function DashboardPage() {
         const mapped: Device[] = list.map((d) => {
           const id = String(d.id);
 
+          // Determine ON/OFF
           const on =
             d.type === "relay"
-              ? false // default
+              ? false
               : typeof d.isOn === "boolean"
               ? d.isOn
               : typeof d.on === "boolean"
@@ -110,12 +115,12 @@ export default function DashboardPage() {
 
         setDevices(mapped);
       } catch (err) {
-        console.error("Failed to fetch devices", err);
+        console.error("Fetch devices error", err);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [token]);
 
   // ======================================
   // Connect to WebSocket and realtime data
@@ -127,35 +132,31 @@ export default function DashboardPage() {
       auth: { token },
     });
 
-    socket.on("connect", () => {
-      console.log("Connected WebSocket");
-    });
+    socket.on("connect", () => console.log("Connected WebSocket"));
 
-    socket.on("sensorData", (msg) => {
-      const ts = new Date(msg.time).getTime();
+    socket.on(
+      "sensorData",
+      (msg: { topic: string; time: string; value: number }) => {
+        const ts = new Date(msg.time).getTime();
 
-      // Cập nhật chart như cũ
-      setDataMap((prev) => {
-        const arr = prev[msg.topic] || [];
-        return {
-          ...prev,
-          [msg.topic]: [...arr.slice(-99), { time: ts, value: msg.value }],
-        };
-      });
+        setDataMap((prev) => {
+          const arr = prev[msg.topic] || [];
+          const nextArr: SensorPoint[] = [
+            ...arr.slice(-99),
+            { time: ts, value: msg.value },
+          ];
+          return { ...prev, [msg.topic]: nextArr };
+        });
 
-      // Update relay state
-      setDevices((prev) =>
-        prev.map((d) => {
-          if (d.type === "relay" && d.mqttTopic === msg.topic) {
-            return {
-              ...d,
-              on: msg.value === 1,
-            };
-          }
-          return d;
-        })
-      );
-    });
+        setDevices((prev) =>
+          prev.map((d) =>
+            d.type === "relay" && d.mqttTopic === msg.topic
+              ? { ...d, on: msg.value === 1 }
+              : d
+          )
+        );
+      }
+    );
 
     return () => {
       socket.disconnect();
@@ -166,6 +167,8 @@ export default function DashboardPage() {
   // Toggle devices
   // =====================================
   async function toggle(id: string, next?: boolean) {
+    if (!token) return;
+
     setBusyId(id);
 
     setDevices((ds) =>
@@ -193,9 +196,9 @@ export default function DashboardPage() {
     );
   }
 
-  // =================================
-  // Render data
-  // =================================
+  // ==========================================
+  // Render page
+  // ==========================================
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-8">
       <h1 className="text-3xl font-semibold">Dashboard</h1>
@@ -262,10 +265,7 @@ export default function DashboardPage() {
               value: p.value,
             }));
 
-            // Current value
-            const latest = arr.length > 0 ? arr[arr.length - 1].value : null;
-
-            // Temperature logic
+            const latest = arr.length ? arr[arr.length - 1].value : null;
             const isTemperature = d.name === "Temperature";
             const isDanger = isTemperature && latest !== null && latest >= 28;
 
@@ -283,39 +283,36 @@ export default function DashboardPage() {
                 key={d.id}
                 className="border rounded-xl p-4 bg-white shadow-sm"
               >
-                {/* Current value */}
                 <div
                   className={`text-lg font-semibold mb-2 text-center ${textColor}`}
                 >
                   {latest !== null ? `Value: ${latest}` : "No data."}
                 </div>
 
-                <div style={{ width: "100%", height: 300 }}>
-                  <ResponsiveContainer>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis domain={[minY - 1, maxY + 1]} />
-                      <Tooltip />
+                <div className="w-full overflow-x-auto">
+                  <LineChart width={900} height={300} data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" />
+                    <YAxis domain={[minY - 1, maxY + 1]} />
+                    <Tooltip />
 
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke={lineColor}
-                        strokeWidth={2}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke={lineColor}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
 
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke={lineColor}
-                        fill={isDanger ? "#ff00002a" : "#8884d825"}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke={lineColor}
+                      fill={isDanger ? "#ff00002a" : "#8884d825"}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
                 </div>
 
                 <p className="text-sm text-center mt-2">{d.name}</p>
