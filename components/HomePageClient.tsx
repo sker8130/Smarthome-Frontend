@@ -29,7 +29,7 @@ export default function HomePageClient() {
                 alt="HEHub logo"
                 width={120}
                 height={120}
-                className="object-contain"
+                className="object-contain w-auto h-auto"
               />
             </div>
 
@@ -88,7 +88,7 @@ export default function HomePageClient() {
                 alt="3D smart home"
                 width={500}
                 height={360}
-                className="drop-shadow-2xl"
+                className="drop-shadow-2xl w-auto h-auto"
                 priority
               />
             </div>
@@ -199,7 +199,7 @@ export default function HomePageClient() {
                 alt="HEHub intro"
                 width={260}
                 height={160}
-                className="object-contain"
+                className="object-contain w-auto h-auto"
                 priority
               />
             </a>
