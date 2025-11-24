@@ -2,6 +2,7 @@
 html, body {
   height: 100%;
   color: var(--text-gray);
+  scroll-behavior: smooth;
 }
 :root {
   --primary: #6c4fe0;
