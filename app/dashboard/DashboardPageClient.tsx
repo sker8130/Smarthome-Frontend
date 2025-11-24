@@ -266,7 +266,7 @@ export default function DashboardPage() {
 
             // Temperature logic
             const isTemperature = d.name === "Temperature";
-            const isDanger = isTemperature && latest !== null && latest >= 28;
+            const isDanger = isTemperature && latest !== null && latest > 27;
 
             // Dynamic Y domain
             const values = arr.map((p) => p.value);
