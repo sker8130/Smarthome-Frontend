@@ -1,7 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
+import { io, Socket } from "socket.io-client";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+} from "recharts";
 
 type ApiDevice = {
   id: number | string;
@@ -13,9 +24,22 @@ type ApiDevice = {
   isOn?: boolean;
   on?: boolean;
   status?: boolean;
+  mqttTopic?: string;
 };
 
-type Device = { id: string; name: string; icon: string; on: boolean };
+type Device = {
+  id: string;
+  name: string;
+  type: string;
+  icon: string;
+  on: boolean;
+  mqttTopic?: string;
+};
+
+interface SensorPoint {
+  time: number;
+  value: number;
+}
 
 const iconMap: Record<string, string> = {
   fan: "/icons/fan.png",
@@ -25,11 +49,16 @@ const iconMap: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const token = getAuthToken();
+
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [totalPower, setTotalPower] = useState<number | null>(null);
 
+  // Fetch data realtime from back-end
+  const [dataMap, setDataMap] = useState<Record<string, SensorPoint[]>>({});
+
+  // Check JWT and redirect if invalid
   useEffect(() => {
     const token = getAuthToken();
     if (!token) {
@@ -37,92 +66,108 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // =================================
+  // Fetch all devices
+  // =================================
   useEffect(() => {
     (async () => {
       try {
-        const data: ApiDevice[] = await apiFetch("/devices");
-        const mapped: Device[] =
-          (data || []).map((d) => {
-            const id = String(d.id);
-            const on =
-              typeof d.isOn === "boolean"
-                ? d.isOn
-                : typeof d.on === "boolean"
-                ? d.on
-                : typeof d.status === "boolean"
-                ? d.status
-                : false;
+        const res: any = await apiFetch("/devices");
+        const list: ApiDevice[] = Array.isArray(res.data) ? res.data : [];
 
-            const keyGuess =
-              id ||
-              (d.type ?? "").toLowerCase() ||
-              (d.name ?? "").toLowerCase().split(" ")[0];
+        const mapped: Device[] = list.map((d) => {
+          const id = String(d.id);
 
-            const icon =
-              iconMap[keyGuess] ||
-              (d.name?.toLowerCase().includes("quạt")
-                ? iconMap.fan
-                : d.name?.toLowerCase().includes("loa")
-                ? iconMap.speaker
-                : d.name?.toLowerCase().includes("đèn")
-                ? iconMap.light
-                : "/icons/light.png");
+          const on =
+            d.type === "relay"
+              ? false // default
+              : typeof d.isOn === "boolean"
+              ? d.isOn
+              : typeof d.on === "boolean"
+              ? d.on
+              : typeof d.status === "boolean"
+              ? d.status
+              : false;
 
-            return { id, name: d.name ?? `Device ${id}`, icon, on };
-          }) || [];
+          const icon =
+            d.type === "light"
+              ? iconMap.light
+              : d.type === "fan"
+              ? iconMap.fan
+              : d.type === "speaker"
+              ? iconMap.speaker
+              : "/icons/light.png";
+
+          return {
+            id,
+            name: d.name ?? `Device ${id}`,
+            icon,
+            on,
+            mqttTopic: d.mqttTopic,
+            type: d.type ?? "device",
+          };
+        });
 
         setDevices(mapped);
-      } catch {
-        setDevices([
-          { id: "fan", name: "Quạt", icon: "/icons/fan.png", on: true },
-          { id: "light", name: "Đèn", icon: "/icons/light.png", on: false },
-          {
-            id: "lightauto",
-            name: "Đèn tự động",
-            icon: "/icons/light-auto.gif",
-            on: false,
-          },
-          { id: "speaker", name: "Loa", icon: "/icons/speaker.png", on: true },
-        ]);
+      } catch (err) {
+        console.error("Failed to fetch devices", err);
       } finally {
         setLoading(false);
-      }
-
-      try {
-        const total = await apiFetch("/energy-consumptions/total");
-        const val =
-          typeof total === "number"
-            ? total
-            : total?.total?.power ?? total?.total_power ?? total?.value ?? null;
-        if (typeof val === "number") setTotalPower(val);
-      } catch {
       }
     })();
   }, []);
 
-  const totalOn = useMemo(() => devices.filter((d) => d.on).length, [devices]);
+  // ======================================
+  // Connect to WebSocket and realtime data
+  // ======================================
+  useEffect(() => {
+    if (!token) return;
 
-  const dailyKwh = useMemo(() => {
-    if (typeof totalPower === "number") return totalPower;
-    return 9.2;
-  }, [totalPower]);
-  const limitKwh = 10;
-  const ratio = dailyKwh / limitKwh;
-  const badge =
-    ratio >= 1
-      ? {
-          text: "Energy Limit",
-          color: "bg-red-100 text-red-700 border-red-200",
-        }
-      : ratio >= 0.7
-      ? {
-          text: "High Usage",
-          color: "bg-yellow-100 text-yellow-700 border-yellow-200",
-        }
-      : { text: "Normal", color: "bg-gray-100 text-gray-700 border-gray-200" };
+    const socket: Socket = io("http://localhost:3000", {
+      auth: { token },
+    });
 
+    socket.on("connect", () => {
+      console.log("Connected WebSocket");
+    });
+
+    socket.on("sensorData", (msg) => {
+      const ts = new Date(msg.time).getTime();
+
+      // Cập nhật chart như cũ
+      setDataMap((prev) => {
+        const arr = prev[msg.topic] || [];
+        return {
+          ...prev,
+          [msg.topic]: [...arr.slice(-99), { time: ts, value: msg.value }],
+        };
+      });
+
+      // Update relay state
+      setDevices((prev) =>
+        prev.map((d) => {
+          if (d.type === "relay" && d.mqttTopic === msg.topic) {
+            return {
+              ...d,
+              on: msg.value === 1,
+            };
+          }
+          return d;
+        })
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token]);
+
+  // =====================================
+  // Toggle devices
+  // =====================================
   async function toggle(id: string, next?: boolean) {
     setBusyId(id);
+
     setDevices((ds) =>
       ds.map((d) => (d.id === id ? { ...d, on: next ?? !d.on } : d))
     );
@@ -130,155 +175,154 @@ export default function DashboardPage() {
     try {
       await apiFetch(`/devices/${id}/toggle`, { method: "POST" });
     } catch {
+      // Rollback
       setDevices((ds) =>
         ds.map((d) => (d.id === id ? { ...d, on: !(next ?? !d.on) } : d))
       );
-      alert("Không thể bật/tắt thiết bị. Kiểm tra server hoặc token.");
+      alert("Unable to use device.");
     } finally {
       setBusyId(null);
-    }
-  }
-
-  async function toggleAll(next: boolean) {
-    const prev = devices;
-    setDevices((ds) => ds.map((d) => ({ ...d, on: next })));
-    try {
-      const toToggle = prev.filter((d) => d.on !== next).map((d) => d.id);
-      await Promise.all(
-        toToggle.map((id) =>
-          apiFetch(`/devices/${id}/toggle`, { method: "POST" })
-        )
-      );
-    } catch {
-      // rollback
-      setDevices(prev);
-      alert("Không thể áp dụng cho tất cả thiết bị.");
     }
   }
 
   if (loading) {
     return (
       <main className="mx-auto max-w-5xl p-6">
-        <p className="animate-pulse text-gray-500">Đang tải thiết bị…</p>
+        <p>Loading...</p>
       </main>
     );
   }
 
+  // =================================
+  // Render data
+  // =================================
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-8">
-      <header className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold">Smarthome — Dashboard</h1>
-        <div
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${badge.color}`}
-        >
-          <span>⚡</span>
-          <span>{badge.text}</span>
-          <span className="ml-1 font-mono">
-            {dailyKwh.toFixed(1)} / {limitKwh} kWh
-          </span>
-        </div>
-      </header>
+      <h1 className="text-3xl font-semibold">Dashboard</h1>
 
-      <section className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => toggleAll(false)}
-          className="rounded-xl border px-4 py-2 hover:bg-gray-50"
-        >
-          Tắt tất cả
-        </button>
-        <button
-          onClick={() => toggleAll(true)}
-          className="rounded-xl border px-4 py-2 hover:bg-gray-50"
-        >
-          Bật tất cả
-        </button>
-        <span className="text-sm text-gray-500">
-          Đang bật:{" "}
-          <b>
-            {totalOn}/{devices.length}
-          </b>
-        </span>
-      </section>
-
+      {/* DEVICES */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {devices.map((d) => (
-          <article
-            key={d.id}
-            className="rounded-2xl border bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between">
-              <div className="h-10 w-10">
-                {d.icon.startsWith("http") || d.icon.startsWith("/") ? (
-                  <img
-                    src={d.icon}
-                    alt={d.name}
-                    className="h-full w-full object-contain"
-                  />
-                ) : (
-                  <span className="text-2xl">{d.icon}</span>
-                )}
-              </div>
+        {devices
+          .filter((d) => d.type !== "sensor")
+          .map((d) => {
+            const isRelay = d.type === "relay";
 
-              <button
-                onClick={() => (busyId ? null : toggle(d.id))}
-                disabled={busyId === d.id}
-                className={`inline-flex items-center rounded-full px-3 py-1 text-sm border transition
-                  ${
-                    d.on
-                      ? "bg-green-600 text-white border-green-600"
-                      : "bg-gray-100 text-gray-700 border-gray-200"
-                  }
-                  ${
-                    busyId === d.id
-                      ? "opacity-60 cursor-not-allowed"
-                      : "hover:opacity-90"
-                  }
-                `}
+            return (
+              <article
+                key={d.id}
+                className="rounded-2xl border bg-white p-4 shadow-sm"
               >
-                {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
-              </button>
-            </div>
-            <h3 className="mt-3 text-base font-medium">{d.name}</h3>
-            <p className="mt-1 text-xs text-gray-500">ID: {d.id}</p>
-          </article>
-        ))}
+                <div className="flex items-start justify-between">
+                  <img src={d.icon} className="h-10 w-10 object-contain" />
+
+                  {/* Relay button */}
+                  {isRelay ? (
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
+                        d.on
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-gray-100 text-gray-700 border-gray-200"
+                      }`}
+                    >
+                      {d.on ? "ON" : "OFF"}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => toggle(d.id)}
+                      disabled={busyId === d.id}
+                      className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
+                        d.on
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-gray-100 text-gray-700 border-gray-200"
+                      }`}
+                    >
+                      {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
+                    </button>
+                  )}
+                </div>
+
+                <h3 className="mt-3 text-base font-medium">{d.name}</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  Topic: {d.mqttTopic || "—"}
+                </p>
+              </article>
+            );
+          })}
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard
-          label="Tiêu thụ hôm nay"
-          value={`${dailyKwh.toFixed(1)} kWh`}
-          sub="+0.8 so với hôm qua"
-        />
-        <StatCard
-          label="Thiết bị đang bật"
-          value={String(totalOn)}
-          sub={`${Math.round((totalOn / devices.length) * 100)}% tổng số`}
-        />
-        <StatCard
-          label="Chi phí ước tính"
-          value={(dailyKwh * 3000).toLocaleString("vi-VN") + " đ"}
-          sub="giả định 3.000đ/kWh"
-        />
+      {/* SENSOR CHARTS */}
+      <section className="grid grid-cols-1 gap-8">
+        {devices
+          .filter((d) => d.type === "sensor")
+          .map((d) => {
+            const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
+
+            const chartData = arr.map((p) => ({
+              time: new Date(p.time).toLocaleTimeString(),
+              value: p.value,
+            }));
+
+            // Current value
+            const latest = arr.length > 0 ? arr[arr.length - 1].value : null;
+
+            // Temperature logic
+            const isTemperature = d.name === "Temperature";
+            const isDanger = isTemperature && latest !== null && latest >= 28;
+
+            // Dynamic Y domain
+            const values = arr.map((p) => p.value);
+            const minY = values.length > 0 ? Math.min(...values) : 0;
+            const maxY = values.length > 0 ? Math.max(...values) : 10;
+
+            // Chart color (normal or danger)
+            const lineColor = isDanger ? "#d60000" : "#245bcbff";
+            const textColor = isDanger ? "text-red-600" : "text-blue-600";
+
+            return (
+              <div
+                key={d.id}
+                className="border rounded-xl p-4 bg-white shadow-sm"
+              >
+                {/* Current value */}
+                <div
+                  className={`text-lg font-semibold mb-2 text-center ${textColor}`}
+                >
+                  {latest !== null ? `Value: ${latest}` : "No data."}
+                </div>
+
+                <div style={{ width: "100%", height: 300 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[minY - 1, maxY + 1]} />
+                      <Tooltip />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        fill={isDanger ? "#ff00002a" : "#8884d825"}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <p className="text-sm text-center mt-2">{d.name}</p>
+              </div>
+            );
+          })}
       </section>
     </main>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-      {sub && <p className="mt-1 text-xs text-gray-500">{sub}</p>}
-    </div>
   );
 }
