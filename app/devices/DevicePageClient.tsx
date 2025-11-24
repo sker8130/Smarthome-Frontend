@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 
 type ApiDevice = {
   id: number;
@@ -21,7 +22,10 @@ export default function DevicePageClient() {
   const [editItem, setEditItem] = useState<ApiDevice | null>(null);
   const [addMode, setAddMode] = useState(false);
 
-  const [sortConfig, setSortConfig] = useState<{ key: keyof ApiDevice; direction: "asc" | "desc" } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof ApiDevice;
+    direction: "asc" | "desc";
+  } | null>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -44,7 +48,10 @@ export default function DevicePageClient() {
 
   function handleSort(key: keyof ApiDevice) {
     if (sortConfig?.key === key) {
-      setSortConfig({ key, direction: sortConfig.direction === "asc" ? "desc" : "asc" });
+      setSortConfig({
+        key,
+        direction: sortConfig.direction === "asc" ? "desc" : "asc",
+      });
     } else {
       setSortConfig({ key, direction: "asc" });
     }
@@ -142,170 +149,289 @@ export default function DevicePageClient() {
   }
 
   if (loading) {
-    return <div className="p-6 text-lg">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-[#f4f5ff]">
+        <DashboardHeader />
+        <main className="mx-auto max-w-6xl p-6">
+          <p className="text-gray-700">Loading devices...</p>
+        </main>
+      </div>
+    );
   }
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-semibold">Devices</h1>
-        <button
-          onClick={openAddModal}
-          className="px-4 py-2 rounded bg-green-600 text-white"
-        >
-          + Add Device
-        </button>
-      </div>
+    <div className="min-h-screen bg-[#f4f5ff]">
+      <DashboardHeader />
 
-      <table className="w-full border border-gray-300 text-sm">
-        <thead className="bg-green-600 text-white">
-          <tr>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("id")}>
-              ID {sortConfig?.key === "id" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("name")}>
-              Name {sortConfig?.key === "name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("type")}>
-              Type {sortConfig?.key === "type" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("mqttTopic")}>
-              MQTT Topic {sortConfig?.key === "mqttTopic" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("description")}>
-              Description {sortConfig?.key === "description" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 w-32">Actions</th>
-          </tr>
-        </thead>
+      <main className="mx-auto max-w-6xl p-6 space-y-6">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900">Devices</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage your smart devices, topics and descriptions in one place.
+            </p>
+          </div>
 
-        <tbody>
-          {sortedDevices.map((d) => (
-            <tr key={d.id}>
-              <td className="border p-2">{d.id}</td>
-              <td className="border p-2">{d.name}</td>
-              <td className="border p-2">{d.type}</td>
-              <td className="border p-2">{d.mqttTopic}</td>
-              <td className="border p-2">{d.description}</td>
-              <td className="border p-2 text-center">
-                <button
-                  onClick={() => openEditModal(d)}
-                  className="p-1 rounded hover:bg-blue-100"
-                  title="Edit"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-blue-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M11 4h10M4 21v-7a4 4 0 014-4h12M16 3l5 5M5 21l4-4"
-                    />
-                  </svg>
-                </button>
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center rounded-xl bg-[var(--color-purple)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[var(--color-darkpurple)] transition"
+          >
+            <span className="mr-2 text-lg leading-none">+</span>
+            Add Device
+          </button>
+        </div>
 
-                <button
-                  onClick={() => deleteDevice(d.id)}
-                  className="p-1 rounded hover:bg-red-100"
-                  title="Delete"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 text-red-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* EDIT MODAL */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-white rounded-xl p-6 w-[420px] shadow-lg">
-            <h2 className="text-xl font-semibold mb-4">
-              {addMode ? "Add New Device" : `Edit Device ${editItem?.name}`}
+        {/* TABLE CARD */}
+        <section className="rounded-2xl border border-purple-50 bg-white/90 p-4 shadow-sm md:p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Device List
             </h2>
+            <p className="text-xs text-gray-400">
+              {devices.length} device{devices.length !== 1 ? "s" : ""}
+            </p>
+          </div>
 
-            <div className="space-y-3">
-              <input
-                className="w-full border p-2 rounded"
-                placeholder="Name"
-                value={form.name}
-                onChange={(e) =>
-                  setForm({ ...form, name: e.target.value })
-                }
-              />
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[var(--color-purple)] text-white">
+                <tr>
+                  <SortableHeader
+                    label="ID"
+                    active={sortConfig?.key === "id"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("id")}
+                    className="w-20"
+                  />
+                  <SortableHeader
+                    label="Name"
+                    active={sortConfig?.key === "name"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("name")}
+                  />
+                  <SortableHeader
+                    label="Type"
+                    active={sortConfig?.key === "type"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("type")}
+                    className="w-32"
+                  />
+                  <SortableHeader
+                    label="MQTT Topic"
+                    active={sortConfig?.key === "mqttTopic"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("mqttTopic")}
+                    className="w-56"
+                  />
+                  <SortableHeader
+                    label="Description"
+                    active={sortConfig?.key === "description"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("description")}
+                  />
+                  <th className="whitespace-nowrap border-l border-gray-200 px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
 
-              <select
-                className="w-full border p-2 rounded"
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-              >
-                <option value="sensor">Sensor</option>
-                <option value="light">Light</option>
-                <option value="fan">Fan</option>
-                <option value="speaker">Speaker</option>
-                <option value="relay">Relay</option>
-              </select>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {sortedDevices.map((d, index) => (
+                  <tr
+                    key={d.id}
+                    className={index % 2 === 0 ? "bg-white" : "bg-[#faf9ff]"}
+                  >
+                    <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-gray-500">
+                      #{d.id}
+                    </td>
+                    <td className="max-w-[180px] truncate px-4 py-2 text-sm text-gray-800">
+                      {d.name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-[var(--color-purple)]">
+                      {d.type || "—"}
+                    </td>
+                    <td className="max-w-[220px] truncate px-4 py-2 text-xs text-gray-600">
+                      {d.mqttTopic || "—"}
+                    </td>
+                    <td className="max-w-[260px] truncate px-4 py-2 text-xs text-gray-600">
+                      {d.description || "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right">
+                      <div className="inline-flex gap-1">
+                        <button
+                          onClick={() => openEditModal(d)}
+                          className="inline-flex items-center rounded-lg bg-[#edf2ff] px-2 py-1 text-xs font-semibold text-[var(--color-purple)] hover:bg-[#e0e6ff]"
+                          title="Edit"
+                        >
+                          ✏️
+                          <span className="ml-1 hidden sm:inline">Edit</span>
+                        </button>
 
-              <select
-                className="w-full border p-2 rounded"
-                value={form.mqttTopic}
-                onChange={(e) => setForm({ ...form, mqttTopic: e.target.value })}
-              >
-                {Array.from({ length: 20 }, (_, i) => `27C45UV/feeds/V${i + 1}`).map(
-                  (topic) => (
-                    <option key={topic} value={topic}>
-                      {topic}
-                    </option>
-                  )
+                        <button
+                          onClick={() => deleteDevice(d.id)}
+                          className="inline-flex items-center rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                          title="Delete"
+                        >
+                          🗑
+                          <span className="ml-1 hidden sm:inline">Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {sortedDevices.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      No devices found. Click <strong>Add Device</strong> to
+                      create one.
+                    </td>
+                  </tr>
                 )}
-              </select>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-              <textarea
-                className="w-full border p-2 rounded"
-                placeholder="Description"
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-              />
-            </div>
+        {/* EDIT / ADD MODAL */}
+        {modalOpen && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {addMode ? "Add New Device" : `Edit Device`}
+              </h2>
+              {!addMode && editItem && (
+                <p className="mt-1 text-xs text-gray-500">
+                  ID: #{editItem.id} • {editItem.name}
+                </p>
+              )}
 
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 rounded bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={addMode ? saveAdd : saveEdit}
-                className="px-4 py-2 rounded bg-green-600 text-white"
-              >
-                {addMode ? "Add" : "Save"}
-              </button>
+              <div className="mt-5 space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Name
+                  </label>
+                  <input
+                    className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
+                    placeholder="Device name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      Type
+                    </label>
+                    <select
+                      className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
+                      value={form.type}
+                      onChange={(e) =>
+                        setForm({ ...form, type: e.target.value })
+                      }
+                    >
+                      <option value="sensor">Sensor</option>
+                      <option value="light">Light</option>
+                      <option value="fan">Fan</option>
+                      <option value="speaker">Speaker</option>
+                      <option value="relay">Relay</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      MQTT Topic
+                    </label>
+                    <select
+                      className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
+                      value={form.mqttTopic}
+                      onChange={(e) =>
+                        setForm({ ...form, mqttTopic: e.target.value })
+                      }
+                    >
+                      {Array.from(
+                        { length: 20 },
+                        (_, i) => `27C45UV/feeds/V${i + 1}`
+                      ).map((topic) => (
+                        <option key={topic} value={topic}>
+                          {topic}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Description
+                  </label>
+                  <textarea
+                    className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
+                    rows={3}
+                    placeholder="Short description for this device..."
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addMode ? saveAdd : saveEdit}
+                  className="rounded-xl bg-[var(--color-purple)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--color-darkpurple)]"
+                >
+                  {addMode ? "Add Device" : "Save Changes"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </main>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/* Small component for sortable table header */
+function SortableHeader({
+  label,
+  active,
+  direction,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  active?: boolean;
+  direction?: "asc" | "desc";
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`whitespace-nowrap px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide ${className}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-1"
+      >
+        <span>{label}</span>
+        {active && (
+          <span className="text-[10px]">{direction === "asc" ? "▲" : "▼"}</span>
+        )}
+      </button>
+    </th>
   );
 }
