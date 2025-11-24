@@ -36,7 +36,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
+      const res = await fetch(`http://localhost:3000/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,15 +207,15 @@ function Field({
     status === "mismatch"
       ? "bg-red-50 border border-red-400 text-red-600 placeholder:text-red-400"
       : status === "match"
-      ? "bg-green-50 border border-green-500 text-green-700 placeholder:text-green-600"
-      : "bg-[#eaf0ff] text-gray-800 placeholder:text-gray-500";
+        ? "bg-green-50 border border-green-500 text-green-700 placeholder:text-green-600"
+        : "bg-[#eaf0ff] text-gray-800 placeholder:text-gray-500";
 
   const iconColor =
     status === "mismatch"
       ? "text-red-500"
       : status === "match"
-      ? "text-green-600"
-      : "text-gray-600";
+        ? "text-green-600"
+        : "text-gray-600";
 
   const IconSvg = {
     user: (
