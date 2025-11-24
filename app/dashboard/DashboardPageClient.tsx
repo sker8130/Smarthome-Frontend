@@ -1,5 +1,9 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
@@ -190,9 +194,12 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
-        <p>Loading...</p>
-      </main>
+      <div className="min-h-screen bg-[var(--color-purple)] text-white">
+        <DashboardHeader />
+        <main className="mx-auto my-auto max-w-5xl p-6">
+          <p>Loading...</p>
+        </main>
+      </div>
     );
   }
 
@@ -200,126 +207,128 @@ export default function DashboardPage() {
   // Render page
   // ==========================================
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-8">
-      <h1 className="text-3xl font-semibold">Dashboard</h1>
+    <div className="container bg-[var(--color-purple)] text-white min-h-screen">
+      <DashboardHeader />
+      <main className="mx-auto max-w-5xl p-6 space-y-8">
 
-      {/* DEVICES */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {devices
-          .filter((d) => d.type !== "sensor")
-          .map((d) => {
-            const isRelay = d.type === "relay";
+        {/* DEVICES */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {devices
+            .filter((d) => d.type !== "sensor")
+            .map((d) => {
+              const isRelay = d.type === "relay";
 
-            return (
-              <article
-                key={d.id}
-                className="rounded-2xl border bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between">
-                  <img src={d.icon} className="h-10 w-10 object-contain" />
-
-                  {/* Relay button */}
-                  {isRelay ? (
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
-                        d.on
-                          ? "bg-green-600 text-white border-green-600"
-                          : "bg-gray-100 text-gray-700 border-gray-200"
-                      }`}
-                    >
-                      {d.on ? "ON" : "OFF"}
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => toggle(d.id)}
-                      disabled={busyId === d.id}
-                      className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
-                        d.on
-                          ? "bg-green-600 text-white border-green-600"
-                          : "bg-gray-100 text-gray-700 border-gray-200"
-                      }`}
-                    >
-                      {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
-                    </button>
-                  )}
-                </div>
-
-                <h3 className="mt-3 text-base font-medium">{d.name}</h3>
-                <p className="mt-1 text-xs text-gray-500">
-                  Topic: {d.mqttTopic || "—"}
-                </p>
-              </article>
-            );
-          })}
-      </section>
-
-      {/* SENSOR CHARTS */}
-      <section className="grid grid-cols-1 gap-8">
-        {devices
-          .filter((d) => d.type === "sensor")
-          .map((d) => {
-            const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
-
-            const chartData = arr.map((p) => ({
-              time: new Date(p.time).toLocaleTimeString(),
-              value: p.value,
-            }));
-
-            const latest = arr.length ? arr[arr.length - 1].value : null;
-            const isTemperature = d.name === "Temperature";
-            const isDanger = isTemperature && latest !== null && latest >= 28;
-
-            // Dynamic Y domain
-            const values = arr.map((p) => p.value);
-            const minY = values.length > 0 ? Math.min(...values) : 0;
-            const maxY = values.length > 0 ? Math.max(...values) : 10;
-
-            // Chart color (normal or danger)
-            const lineColor = isDanger ? "#d60000" : "#245bcbff";
-            const textColor = isDanger ? "text-red-600" : "text-blue-600";
-
-            return (
-              <div
-                key={d.id}
-                className="border rounded-xl p-4 bg-white shadow-sm"
-              >
-                <div
-                  className={`text-lg font-semibold mb-2 text-center ${textColor}`}
+              return (
+                <article
+                  key={d.id}
+                  className="rounded-2xl border bg-white p-4 shadow-sm"
                 >
-                  {latest !== null ? `Value: ${latest}` : "No data."}
+                  <div className="flex items-start justify-between">
+                    <img src={d.icon} className="h-10 w-10 object-contain" />
+
+                    {/* Relay button */}
+                    {isRelay ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
+                          d.on
+                            ? "bg-green-600 text-white border-green-600"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {d.on ? "ON" : "OFF"}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => toggle(d.id)}
+                        disabled={busyId === d.id}
+                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
+                          d.on
+                            ? "bg-green-600 text-white border-green-600"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
+                      </button>
+                    )}
+                  </div>
+
+                  <h3 className="mt-3 text-base font-medium">{d.name}</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Topic: {d.mqttTopic || "—"}
+                  </p>
+                </article>
+              );
+            })}
+        </section>
+
+        {/* SENSOR CHARTS */}
+        <section className="grid grid-cols-1 gap-8">
+          {devices
+            .filter((d) => d.type === "sensor")
+            .map((d) => {
+              const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
+
+              const chartData = arr.map((p) => ({
+                time: new Date(p.time).toLocaleTimeString(),
+                value: p.value,
+              }));
+
+              const latest = arr.length ? arr[arr.length - 1].value : null;
+              const isTemperature = d.name === "Temperature";
+              const isDanger = isTemperature && latest !== null && latest >= 28;
+
+              // Dynamic Y domain
+              const values = arr.map((p) => p.value);
+              const minY = values.length > 0 ? Math.min(...values) : 0;
+              const maxY = values.length > 0 ? Math.max(...values) : 10;
+
+              // Chart color (normal or danger)
+              const lineColor = isDanger ? "#d60000" : "#245bcbff";
+              const textColor = isDanger ? "text-red-600" : "text-blue-600";
+
+              return (
+                <div
+                  key={d.id}
+                  className="border rounded-xl p-4 bg-white shadow-sm"
+                >
+                  <div
+                    className={`text-lg font-semibold mb-2 text-center ${textColor}`}
+                  >
+                    {latest !== null ? `Value: ${latest}` : "No data."}
+                  </div>
+
+                  <div className="w-full overflow-x-auto">
+                    <LineChart width={900} height={300} data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis domain={[minY - 1, maxY + 1]} />
+                      <Tooltip />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        fill={isDanger ? "#ff00002a" : "#8884d825"}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </div>
+
+                  <p className="text-sm text-center mt-2">{d.name}</p>
                 </div>
-
-                <div className="w-full overflow-x-auto">
-                  <LineChart width={900} height={300} data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" />
-                    <YAxis domain={[minY - 1, maxY + 1]} />
-                    <Tooltip />
-
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke={lineColor}
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke={lineColor}
-                      fill={isDanger ? "#ff00002a" : "#8884d825"}
-                      isAnimationActive={false}
-                    />
-                  </LineChart>
-                </div>
-
-                <p className="text-sm text-center mt-2">{d.name}</p>
-              </div>
-            );
-          })}
-      </section>
-    </main>
+              );
+            })}
+        </section>
+      </main>
+    </div>
   );
 }
