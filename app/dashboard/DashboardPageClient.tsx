@@ -1,8 +1,5 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
@@ -51,6 +48,25 @@ const iconMap: Record<string, string> = {
   lightauto: "/icons/light-auto.gif",
   speaker: "/icons/speaker.png",
 };
+
+type SensorTooltipProps = {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+};
+
+function SensorTooltip({ active, payload, label }: SensorTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+
+  const value = payload[0].value;
+
+  return (
+    <div className="rounded-xl border border-purple-100 bg-white px-3 py-2 text-xs shadow-lg">
+      <div className="font-semibold text-gray-800">Value: {value}</div>
+      <div className="mt-1 text-[10px] text-gray-500">{label}</div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -259,7 +275,9 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                  <h3 className="mt-3 text-base font-medium">{d.name}</h3>
+                  <h3 className="mt-3 text-base font-medium text-gray-900">
+                    {d.name}
+                  </h3>
                   <p className="mt-1 text-xs text-gray-500">
                     Topic: {d.mqttTopic || "—"}
                   </p>
@@ -290,47 +308,108 @@ export default function DashboardPage() {
               const maxY = values.length > 0 ? Math.max(...values) : 10;
 
               // Chart color (normal or danger)
-              const lineColor = isDanger ? "#d60000" : "#245bcbff";
-              const textColor = isDanger ? "text-red-600" : "text-blue-600";
+              const lineColor = isDanger ? "#d60000" : "#7B79DA";
+              const gradientId = `sensorGradient-${d.id}`;
 
               return (
                 <div
                   key={d.id}
-                  className="border rounded-xl p-4 bg-white shadow-sm"
+                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${
+                    isDanger
+                      ? "border-red-100 bg-red-50/60 shadow-red-100/80"
+                      : "border-purple-50 bg-white shadow-purple-100/80"
+                  }`}
                 >
-                  <div
-                    className={`text-lg font-semibold mb-2 text-center ${textColor}`}
-                  >
-                    {latest !== null ? `Value: ${latest}` : "No data."}
+                  {/* Header card */}
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        Sensor
+                      </p>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        {d.name}
+                      </h3>
+                    </div>
+
+                    <div
+                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${
+                        isDanger
+                          ? "bg-red-100 text-red-700"
+                          : "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
+                      }`}
+                    >
+                      <span
+                        className={`mr-2 h-2 w-2 rounded-full ${
+                          isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
+                        }`}
+                      />
+                      {latest !== null ? `Now: ${latest}` : "No data"}
+                    </div>
                   </div>
 
+                  {/* Chart */}
                   <div className="w-full overflow-x-auto">
-                    <LineChart width={900} height={300} data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="time" />
-                      <YAxis domain={[minY - 1, maxY + 1]} />
-                      <Tooltip />
+                    <LineChart width={900} height={260} data={chartData}>
+                      <defs>
+                        <linearGradient
+                          id={gradientId}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor={lineColor}
+                            stopOpacity={0.4}
+                          />
+                          <stop
+                            offset="90%"
+                            stopColor={lineColor}
+                            stopOpacity={0.03}
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7f3" />
+                      <XAxis
+                        dataKey="time"
+                        tick={{ fontSize: 11, fill: "#6b7280" }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e5e7f3" }}
+                      />
+                      <YAxis
+                        domain={[minY - 1, maxY + 1]}
+                        tick={{ fontSize: 11, fill: "#6b7280" }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e5e7f3" }}
+                      />
+
+                      <Tooltip content={<SensorTooltip />} />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="none"
+                        fill={`url(#${gradientId})`}
+                        isAnimationActive={false}
+                      />
 
                       <Line
                         type="monotone"
                         dataKey="value"
                         stroke={lineColor}
-                        strokeWidth={2}
+                        strokeWidth={2.4}
                         dot={false}
-                        isAnimationActive={false}
-                      />
-
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke={lineColor}
-                        fill={isDanger ? "#ff00002a" : "#8884d825"}
+                        activeDot={{ r: 4 }}
                         isAnimationActive={false}
                       />
                     </LineChart>
                   </div>
 
-                  <p className="text-sm text-center mt-2">{d.name}</p>
+                  <p className="mt-2 text-center text-sm text-gray-600">
+                    {d.name}
+                  </p>
                 </div>
               );
             })}

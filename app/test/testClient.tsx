@@ -1,402 +1,445 @@
+
+//Test UI chart with fake realtime data
+
 "use client";
-
-import React, { JSX, useEffect, useState } from "react";
+const USE_FAKE_REALTIME = true;
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
+import { io, Socket } from "socket.io-client";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Area,
+} from "recharts";
+import Loader from "@/components/ui/Loader";
 
-// Figma-based Dashboard implementation wired to your real backend (no fake data).
-// - Loads /devices and /sensors from your API using apiFetch
-// - TypeScript interfaces match your backend Postman collection
-// - Provides a toggle() that calls POST /devices/:id/toggle
-// - No fake/random data
-
-export interface ApiDevice {
-  id: number;
+type ApiDevice = {
+  id: number | string;
   name: string;
-  type: string;
+  type?: string;
   description?: string;
   powerValue?: number;
   priority?: number;
-}
+  isOn?: boolean;
+  on?: boolean;
+  status?: boolean;
+  mqttTopic?: string;
+};
 
-export interface ApiSensor {
-  id: number;
+type Device = {
+  id: string;
   name: string;
   type: string;
-  deviceId?: number;
-}
-
-export interface DeviceUI extends ApiDevice {
-  // FE-only fields (optional)
+  icon: string;
+  on: boolean;
   mqttTopic?: string;
-  on?: boolean; // state known by FE or from additional endpoint
-  icon?: string;
+};
+
+interface SensorPoint {
+  time: number;
+  value: number;
 }
 
-export default function FigmaDashboard(): JSX.Element {
-  const [devices, setDevices] = useState<DeviceUI[]>([]);
-  const [sensors, setSensors] = useState<ApiSensor[]>([]);
+const iconMap: Record<string, string> = {
+  fan: "/icons/fan.png",
+  light: "/icons/light.png",
+  lightauto: "/icons/light-auto.gif",
+  speaker: "/icons/speaker.png",
+};
+
+type SensorTooltipProps = {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+};
+
+function SensorTooltip({ active, payload, label }: SensorTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+
+  const value = payload[0].value;
+
+  return (
+    <div className="rounded-xl border border-purple-100 bg-white px-3 py-2 text-xs shadow-lg">
+      <div className="font-semibold text-gray-800">Value: {value}</div>
+      <div className="mt-1 text-[10px] text-gray-500">{label}</div>
+    </div>
+  );
+}
+
+export default function DashboardTestPage() {
+  const [token, setToken] = useState<string | null>(null);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  // icon helper
-  const iconFor = (type?: DeviceUI["type"]) => {
-    switch (type) {
-      case "fan":
-        return "/icons/fan.png";
-      case "light":
-        return "/icons/light.png";
-      case "speaker":
-        return "/icons/speaker.png";
-      case "relay":
-        return "/icons/relay.png";
-      case "sensor":
-        return "/icons/sensor.png";
-      default:
-        return "/icons/device.png";
-    }
-  };
+  // Fetch data realtime from back-end
+  const [dataMap, setDataMap] = useState<Record<string, SensorPoint[]>>({});
 
+  // ==========================================
+  // Get client token
+  // ==========================================
   useEffect(() => {
-    const token = getAuthToken?.();
-    if (!token) {
-      if (typeof window !== "undefined") window.location.href = "/login";
+    const t = getAuthToken();
+    if (!t) {
+      window.location.href = "/login";
       return;
     }
+    setToken(t);
+  }, []);
+
+  // ==========================================
+  // Fetch devices after get token
+  // ==========================================
+  useEffect(() => {
+    if (!token) return;
 
     (async () => {
       try {
-        setLoading(true);
+        const res: any = await apiFetch("/devices");
+        const list: ApiDevice[] = Array.isArray(res.data) ? res.data : [];
 
-        // Load devices
-        const devRes = (await apiFetch("/devices")) as
-          | { data?: ApiDevice[] }
-          | undefined;
-        const list = Array.isArray(devRes?.data) ? devRes!.data : [];
+        const mapped: Device[] = list.map((d) => {
+          const id = String(d.id);
 
-        const mapped: DeviceUI[] = list.map((d) => ({
-          ...d,
-          icon: iconFor(d.type),
-          // FE will manage ON-state; default to false if nothing else is known
-          on: false,
-        }));
+          // Determine ON/OFF
+          const on =
+            d.type === "relay"
+              ? false
+              : typeof d.isOn === "boolean"
+              ? d.isOn
+              : typeof d.on === "boolean"
+              ? d.on
+              : typeof d.status === "boolean"
+              ? d.status
+              : false;
+
+          const icon =
+            d.type === "light"
+              ? iconMap.light
+              : d.type === "fan"
+              ? iconMap.fan
+              : d.type === "speaker"
+              ? iconMap.speaker
+              : "/icons/light.png";
+
+          return {
+            id,
+            name: d.name ?? `Device ${id}`,
+            icon,
+            on,
+            mqttTopic: d.mqttTopic,
+            type: d.type ?? "device",
+          };
+        });
 
         setDevices(mapped);
-
-        // Load sensors (if present) so UI mirrors backend
-        const senRes = (await apiFetch("/sensors")) as
-          | { data?: ApiSensor[] }
-          | undefined;
-        const sList = Array.isArray(senRes?.data) ? senRes!.data : [];
-        setSensors(sList);
       } catch (err) {
-        console.error("Failed to load devices/sensors", err);
+        console.error("Fetch devices error", err);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [token]);
 
-  // Toggle device state by calling backend endpoint. Backend is the source of truth.
-  async function toggle(id: number) {
+  // ======================================
+  // Connect to WebSocket and realtime data
+  // ======================================
+  // ======================================================
+  // 🔥 REAL WS MODE + FAKE REALTIME DEMO MODE
+  // ======================================================
+  useEffect(() => {
+    if (!token && !USE_FAKE_REALTIME) return;
+
+    // ---------------------------------------------
+    // 🟣 FAKE REALTIME MODE
+    // ---------------------------------------------
+    if (USE_FAKE_REALTIME) {
+      const topics = devices
+        .filter((d) => d.type === "sensor")
+        .map((d) => d.mqttTopic)
+        .filter(Boolean);
+
+      if (topics.length === 0) return;
+
+      const interval = setInterval(() => {
+        topics.forEach((topic) => {
+          const fakeValue = Number((20 + Math.random() * 10).toFixed(1));
+
+          const msg = {
+            topic: topic!,
+            time: new Date().toISOString(),
+            value: fakeValue,
+          };
+
+          // Push fake value to dataMap
+          const ts = new Date(msg.time).getTime();
+
+          setDataMap((prev) => {
+            const arr = prev[msg.topic] || [];
+            const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+            return { ...prev, [msg.topic]: nextArr };
+          });
+        });
+      }, 1800); // mỗi 1.8 giây tạo dữ liệu mới
+
+      return () => clearInterval(interval);
+    }
+
+    // ---------------------------------------------
+    // 🟢 REAL BACKEND WEBSOCKET MODE
+    // ---------------------------------------------
+    const socket: Socket = io("http://localhost:3000", {
+      auth: { token },
+    });
+
+    socket.on("sensorData", (msg) => {
+      const ts = new Date(msg.time).getTime();
+
+      setDataMap((prev) => {
+        const arr = prev[msg.topic] || [];
+        const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+        return { ...prev, [msg.topic]: nextArr };
+      });
+    });
+
+    return () => socket.disconnect();
+  }, [token, devices]);
+
+  // =====================================
+  // Toggle devices
+  // =====================================
+  async function toggle(id: string, next?: boolean) {
+    if (!token) return;
+
     setBusyId(id);
 
-    // Optimistic UI: flip local state while request in progress
-    setDevices((ds) => ds.map((d) => (d.id === id ? { ...d, on: !d.on } : d)));
+    setDevices((ds) =>
+      ds.map((d) => (d.id === id ? { ...d, on: next ?? !d.on } : d))
+    );
 
     try {
       await apiFetch(`/devices/${id}/toggle`, { method: "POST" });
-
-      // Optionally you could re-fetch device details here to get exact state from server
-      // but we'll assume toggle succeeded and keep optimistic state.
-    } catch (err) {
-      // Rollback on error
+    } catch {
+      // Rollback
       setDevices((ds) =>
-        ds.map((d) => (d.id === id ? { ...d, on: !d.on } : d))
+        ds.map((d) => (d.id === id ? { ...d, on: !(next ?? !d.on) } : d))
       );
-      console.error("Toggle failed", err);
-      alert("Unable to toggle device. See console for details.");
+      alert("Unable to use device.");
     } finally {
       setBusyId(null);
     }
   }
+  const [uiLoading, setUiLoading] = useState(true);
 
-  if (loading) {
-    return <div className="p-6">Loading...</div>;
-  }
+  useEffect(() => {
+    const t = setTimeout(() => setUiLoading(false), 800);
+    return () => clearTimeout(t);
+  }, []);
 
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <header className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-bold">
-              SM
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold">SmartHome Dashboard</h1>
-              <p className="text-sm text-gray-500">Overview & device control</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-3 bg-white border rounded-lg px-3 py-2 shadow-sm">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                className="outline-none"
-                placeholder="Search devices, topics..."
-              />
-            </div>
-
-            <button className="px-4 py-2 rounded-lg bg-white border shadow-sm flex items-center gap-2">
-              <img
-                src="/icons/user-placeholder.png"
-                alt="user"
-                className="w-6 h-6 rounded-full"
-              />
-              <span className="text-sm">Admin</span>
-            </button>
-          </div>
-        </header>
-
-        <main className="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left column: controls + small metrics */}
-          <section className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-2xl p-5 shadow-sm border">
-              <h2 className="text-sm font-medium text-gray-600">
-                Quick Controls
-              </h2>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="p-3 bg-green-50 rounded-lg text-left">
-                  <div className="text-xs text-gray-500">Total Devices</div>
-                  <div className="text-xl font-semibold">{devices.length}</div>
-                </div>
-
-                <div className="p-3 bg-yellow-50 rounded-lg text-left">
-                  <div className="text-xs text-gray-500">Active (FE)</div>
-                  <div className="text-xl font-semibold">
-                    {devices.filter((d) => d.on).length}
-                  </div>
-                </div>
-
-                <div className="p-3 bg-blue-50 rounded-lg text-left">
-                  <div className="text-xs text-gray-500">Sensors</div>
-                  <div className="text-xl font-semibold">{sensors.length}</div>
-                </div>
-
-                <div className="p-3 bg-red-50 rounded-lg text-left">
-                  <div className="text-xs text-gray-500">Relays</div>
-                  <div className="text-xl font-semibold">
-                    {devices.filter((d) => d.type === "relay").length}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl p-5 shadow-sm border">
-              <h3 className="text-sm font-medium text-gray-600">Rooms</h3>
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">Living Room</div>
-                  <div className="text-xs text-gray-400">
-                    {
-                      devices.filter(
-                        (d) => d.type === "light" || d.type === "fan"
-                      ).length
-                    }{" "}
-                    devices
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">Bedroom</div>
-                  <div className="text-xs text-gray-400">
-                    {
-                      devices.filter(
-                        (d) =>
-                          d.type === "sensor" &&
-                          d.name?.toLowerCase().includes("bed")
-                      ).length
-                    }{" "}
-                    devices
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="text-sm">Kitchen</div>
-                  <div className="text-xs text-gray-400">
-                    {
-                      devices.filter((d) =>
-                        d.name?.toLowerCase().includes("kitchen")
-                      ).length
-                    }{" "}
-                    devices
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Right column: main content */}
-          <section className="lg:col-span-3 space-y-6">
-            {/* Top stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white rounded-2xl p-4 shadow-sm border">
-                <div className="text-sm text-gray-500">Current Power</div>
-                <div className="mt-2 text-2xl font-semibold">
-                  {devices.reduce((s, d) => s + (d.powerValue || 0), 0)} W
-                </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  From device powerValue
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 shadow-sm border">
-                <div className="text-sm text-gray-500">Temperature</div>
-                <div className="mt-2 text-2xl font-semibold">—</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  Use sensor feed to show real values
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 shadow-sm border">
-                <div className="text-sm text-gray-500">Network</div>
-                <div className="mt-2 text-2xl font-semibold">Online</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  All systems nominal
-                </div>
-              </div>
-            </div>
-
-            {/* Device grid */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Devices</h3>
-                <div className="text-sm text-gray-500">
-                  Manage devices, edit topics and control state
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {devices.map((d) => (
-                  <article
-                    key={d.id}
-                    className="rounded-2xl border p-4 bg-white shadow-sm flex flex-col justify-between"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center">
-                          <img
-                            src={d.icon}
-                            className="h-8 w-8 object-contain"
-                            alt="icon"
-                          />
-                        </div>
-                        <div>
-                          <div className="font-medium">
-                            {d.name || `Device ${d.id}`}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {d.type || "device"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`px-3 py-1 rounded-full text-sm border ${
-                            d.on
-                              ? "bg-green-600 text-white border-green-600"
-                              : "bg-gray-100 text-gray-700 border-gray-200"
-                          }`}
-                        >
-                          {d.on ? "ON" : "OFF"}
-                        </div>
-
-                        <button
-                          onClick={() => toggle(d.id)}
-                          disabled={busyId === d.id}
-                          className="p-2 rounded-md border hover:bg-gray-50"
-                          title="Toggle"
-                        >
-                          {busyId === d.id ? "..." : "Toggle"}
-                        </button>
-
-                        <button
-                          className="p-2 rounded-md border hover:bg-gray-50"
-                          title="Edit"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M11 4h10M4 21v-7a4 4 0 014-4h12M16 3l5 5M5 21l4-4"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 text-xs text-gray-500">
-                      {d.description ?? "No description"}
-                    </div>
-                    <div className="mt-2 text-xs text-gray-400">
-                      Power: {d.powerValue ?? "—"} W • Priority:{" "}
-                      {d.priority ?? "—"}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            {/* Sensor list area */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm border">
-              <h3 className="text-lg font-semibold mb-4">Sensors</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {sensors.length === 0 && (
-                  <div className="text-sm text-gray-500">
-                    No sensors available
-                  </div>
-                )}
-                {sensors.map((s) => (
-                  <div
-                    key={s.id}
-                    className="p-4 rounded-lg border bg-white flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-sm text-gray-500">{s.type}</div>
-                      <div className="text-xl font-semibold mt-1">{s.name}</div>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Device: {s.deviceId ?? "—"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
+  if (uiLoading || loading) {
+    return (
+      <div className="min-h-screen bg-[var(--color-purple)] text-white">
+        <DashboardHeader />
+        <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+          <Loader />
         </main>
       </div>
+    );
+  }
+
+  // ==========================================
+  // Render page
+  // ==========================================
+  return (
+    <div className="container bg-[var(--color-purple)] text-white min-h-screen">
+      <DashboardHeader />
+      <main className="mx-auto max-w-5xl p-6 space-y-8">
+        {/* DEVICES */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {devices
+            .filter((d) => d.type !== "sensor")
+            .map((d) => {
+              const isRelay = d.type === "relay";
+
+              return (
+                <article
+                  key={d.id}
+                  className="rounded-2xl border bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between">
+                    <img src={d.icon} className="h-10 w-10 object-contain" />
+
+                    {/* Relay button */}
+                    {isRelay ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
+                          d.on
+                            ? "bg-green-600 text-white border-green-600"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {d.on ? "ON" : "OFF"}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => toggle(d.id)}
+                        disabled={busyId === d.id}
+                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
+                          d.on
+                            ? "bg-green-600 text-white border-green-600"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
+                      </button>
+                    )}
+                  </div>
+
+                  <h3 className="mt-3 text-base font-medium text-gray-900">
+                    {d.name}
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Topic: {d.mqttTopic || "—"}
+                  </p>
+                </article>
+              );
+            })}
+        </section>
+
+        {/* SENSOR CHARTS */}
+        <section className="grid grid-cols-1 gap-8">
+          {devices
+            .filter((d) => d.type === "sensor")
+            .map((d) => {
+              const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
+
+              const chartData = arr.map((p) => ({
+                time: new Date(p.time).toLocaleTimeString(),
+                value: p.value,
+              }));
+
+              const latest = arr.length ? arr[arr.length - 1].value : null;
+              const isTemperature = d.name === "Temperature";
+              const isDanger = isTemperature && latest !== null && latest >= 28;
+
+              // Dynamic Y domain
+              const values = arr.map((p) => p.value);
+              const minY = values.length > 0 ? Math.min(...values) : 0;
+              const maxY = values.length > 0 ? Math.max(...values) : 10;
+
+              // Chart color (normal or danger)
+              const lineColor = isDanger ? "#d60000" : "#7B79DA";
+              const gradientId = `sensorGradient-${d.id}`;
+
+              return (
+                <div
+                  key={d.id}
+                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${
+                    isDanger
+                      ? "border-red-100 bg-red-50/60 shadow-red-100/80"
+                      : "border-purple-50 bg-white shadow-purple-100/80"
+                  }`}
+                >
+                  {/* Header card */}
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        Sensor
+                      </p>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        {d.name}
+                      </h3>
+                    </div>
+
+                    <div
+                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${
+                        isDanger
+                          ? "bg-red-100 text-red-700"
+                          : "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
+                      }`}
+                    >
+                      <span
+                        className={`mr-2 h-2 w-2 rounded-full ${
+                          isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
+                        }`}
+                      />
+                      {latest !== null ? `Now: ${latest}` : "No data"}
+                    </div>
+                  </div>
+
+                  {/* Chart */}
+                  <div className="w-full overflow-x-auto">
+                    <LineChart width={900} height={260} data={chartData}>
+                      <defs>
+                        <linearGradient
+                          id={gradientId}
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor={lineColor}
+                            stopOpacity={0.4}
+                          />
+                          <stop
+                            offset="90%"
+                            stopColor={lineColor}
+                            stopOpacity={0.03}
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7f3" />
+                      <XAxis
+                        dataKey="time"
+                        tick={{ fontSize: 11, fill: "#6b7280" }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e5e7f3" }}
+                      />
+                      <YAxis
+                        domain={[minY - 1, maxY + 1]}
+                        tick={{ fontSize: 11, fill: "#6b7280" }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e5e7f3" }}
+                      />
+
+                      <Tooltip content={<SensorTooltip />} />
+
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="none"
+                        fill={`url(#${gradientId})`}
+                        isAnimationActive={false}
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke={lineColor}
+                        strokeWidth={2.4}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </div>
+
+                  <p className="mt-2 text-center text-sm text-gray-600">
+                    {d.name}
+                  </p>
+                </div>
+              );
+            })}
+        </section>
+      </main>
     </div>
   );
 }
