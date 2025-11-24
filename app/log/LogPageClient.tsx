@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
 
 type Device = {
   id: number;
@@ -70,6 +71,8 @@ export default function LogPageClient() {
         return log.user?.username ?? "";
       case "timestamp":
         return log.timestamp ?? "";
+      case "action":
+        return log.action ?? "";
       default:
         return (log as any)[key] ?? "";
     }
@@ -78,10 +81,15 @@ export default function LogPageClient() {
   // Handle sort
   function handleSort(key: string) {
     if (sortConfig?.key === key) {
-      setSortConfig({ key, direction: sortConfig.direction === "asc" ? "desc" : "asc" });
+      setSortConfig({
+        key,
+        direction: sortConfig.direction === "asc" ? "desc" : "asc",
+      });
     } else {
       setSortConfig({ key, direction: "asc" });
     }
+    // về trang 1 sau khi đổi sort
+    setCurrentPage(1);
   }
 
   // Sorted logs
@@ -98,78 +106,261 @@ export default function LogPageClient() {
   }
 
   // Pagination
-  const totalPages = Math.ceil(sortedLogs.length / rowsPerPage);
-  const paginatedLogs = sortedLogs.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const totalPages = Math.ceil(sortedLogs.length / rowsPerPage) || 1;
+  const paginatedLogs = sortedLogs.slice(
+    (currentPage - 1) * rowsPerPage,
+    currentPage * rowsPerPage
+  );
 
-  const formatTimestamp = (ts: string) => new Date(ts).toLocaleString();
+  const formatTimestamp = (ts: string) =>
+    new Date(ts).toLocaleString(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
 
-  if (loading) return <div className="p-6 text-lg">Loading logs...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f4f5ff]">
+        <DashboardHeader />
+        <main className="mx-auto max-w-6xl p-6">
+          <p className="text-gray-700">Loading logs...</p>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-3xl font-semibold mb-6">Device Logs</h1>
+    <div className="min-h-screen bg-[#f4f5ff]">
+      <DashboardHeader />
 
-      <table className="w-full border border-gray-300 text-sm">
-        <thead className="bg-green-600 text-white">
-          <tr>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("id")}>
-              ID {sortConfig?.key === "id" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("device.name")}>
-              Device {sortConfig?.key === "device.name" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("user.username")}>
-              User {sortConfig?.key === "user.username" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("action")}>
-              Action {sortConfig?.key === "action" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-            <th className="border p-2 cursor-pointer" onClick={() => handleSort("timestamp")}>
-              Timestamp {sortConfig?.key === "timestamp" ? (sortConfig.direction === "asc" ? "▲" : "▼") : ""}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedLogs.map((log) => (
-            <tr key={log.id} className="hover:bg-gray-50">
-              <td className="border p-2">{log.id}</td>
-              <td className="border p-2">{log.device?.name || "N/A"}</td>
-              <td className="border p-2">{log.user?.username || "N/A"}</td>
-              <td className="border p-2">{log.action}</td>
-              <td className="border p-2">{formatTimestamp(log.timestamp)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <main className="mx-auto max-w-6xl p-6 space-y-6">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900">
+              Device Logs
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              History of manual and automatic relay actions.
+            </p>
+          </div>
 
-      {/* Pagination controls */}
-      <div className="flex justify-center mt-4 gap-2">
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((p) => p - 1)}
-        >
-          Prev
-        </button>
+          <div className="rounded-full bg-white/70 px-4 py-2 text-xs text-gray-500 shadow-sm">
+            Total records:{" "}
+            <span className="font-semibold text-[var(--color-purple)]">
+              {logs.length}
+            </span>
+          </div>
+        </div>
 
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i + 1}
-            className={`px-3 py-1 border rounded ${currentPage === i + 1 ? "bg-green-600 text-white" : ""}`}
-            onClick={() => setCurrentPage(i + 1)}
-          >
-            {i + 1}
-          </button>
-        ))}
+        {/* TABLE CARD */}
+        <section className="rounded-2xl border border-purple-50 bg-white/90 p-4 shadow-sm md:p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Activity log
+            </h2>
+            <p className="text-xs text-gray-400">
+              Page {currentPage} of {totalPages}
+            </p>
+          </div>
 
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((p) => p + 1)}
-        >
-          Next
-        </button>
-      </div>
-    </main>
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[var(--color-purple)] text-white">
+                <tr>
+                  <SortableHeader
+                    label="ID"
+                    sortKey="id"
+                    active={sortConfig?.key === "id"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("id")}
+                    className="w-16"
+                  />
+                  <SortableHeader
+                    label="Device"
+                    sortKey="device.name"
+                    active={sortConfig?.key === "device.name"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("device.name")}
+                    className="w-40"
+                  />
+                  <SortableHeader
+                    label="User"
+                    sortKey="user.username"
+                    active={sortConfig?.key === "user.username"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("user.username")}
+                    className="w-40"
+                  />
+                  <SortableHeader
+                    label="Action"
+                    sortKey="action"
+                    active={sortConfig?.key === "action"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("action")}
+                    className="w-32"
+                  />
+                  <SortableHeader
+                    label="Timestamp"
+                    sortKey="timestamp"
+                    active={sortConfig?.key === "timestamp"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("timestamp")}
+                    className="w-56"
+                  />
+                  <th className="whitespace-nowrap px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                    Mode
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {paginatedLogs.map((log, index) => {
+                  const isOn = log.action === "ON";
+                  const isAuto = log.isAutomatic;
+
+                  return (
+                    <tr
+                      key={log.id}
+                      className={index % 2 === 0 ? "bg-white" : "bg-[#faf9ff]"}
+                    >
+                      <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-gray-500">
+                        #{log.id}
+                      </td>
+                      <td className="max-w-[200px] truncate px-4 py-2 text-sm text-gray-800">
+                        {log.device?.name || "N/A"}
+                      </td>
+                      <td className="max-w-[180px] truncate px-4 py-2 text-xs text-gray-700">
+                        {log.user?.username || "N/A"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-xs">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${
+                            isOn
+                              ? "bg-green-50 text-green-700 border border-green-200"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                          }`}
+                        >
+                          <span
+                            className={`mr-1 h-2 w-2 rounded-full ${
+                              isOn ? "bg-green-500" : "bg-red-500"
+                            }`}
+                          />
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-xs text-gray-700">
+                        {formatTimestamp(log.timestamp)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${
+                            isAuto
+                              ? "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {isAuto ? "Automatic" : "Manual"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {paginatedLogs.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      No logs available.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination controls */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-gray-500">
+              Showing {(currentPage - 1) * rowsPerPage + 1}–
+              {Math.min(currentPage * rowsPerPage, sortedLogs.length)} of{" "}
+              {sortedLogs.length}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                Prev
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i + 1}
+                  className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${
+                    currentPage === i + 1
+                      ? "bg-[var(--color-purple)] text-white"
+                      : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setCurrentPage(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+
+              <button
+                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/* Small component for sortable header */
+function SortableHeader({
+  label,
+  sortKey,
+  active,
+  direction,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  sortKey: string;
+  active?: boolean;
+  direction?: "asc" | "desc";
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`whitespace-nowrap px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide ${className}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-1"
+      >
+        <span>{label}</span>
+        {active && (
+          <span className="text-[10px]">{direction === "asc" ? "▲" : "▼"}</span>
+        )}
+      </button>
+    </th>
   );
 }
