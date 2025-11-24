@@ -31,11 +31,11 @@ export default function DashboardHeader() {
         <div className="flex items-center gap-2">
             <a href="/dashboard">
                 <Image
-                    src="/HEHUB_logo2.svg"
-                    alt="HEHub intro"
-                    width={100}
-                    height={100}
-                    className="object-contain w-auto h-auto"
+                    src="/HEHUB_logo.svg"
+                    alt="HEHub logo"
+                    width={200}
+                    height={200}
+                    className="object-contain"
                     priority
                 />
             </a>
