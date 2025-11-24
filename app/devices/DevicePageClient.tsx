@@ -25,7 +25,11 @@ export default function DevicePageClient() {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof ApiDevice;
     direction: "asc" | "desc";
-  } | null>(null);
+  }>({
+    key: "id",
+    direction: "asc",
+  });
+
 
   const [form, setForm] = useState({
     name: "",
