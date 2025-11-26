@@ -15,7 +15,6 @@ export default function RegisterPage() {
 
   const [show1, setShow1] = useState(false);
   const [show2, setShow2] = useState(false);
-  const [mismatch, setMismatch] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [matchState, setMatchState] = useState<"none" | "match" | "mismatch">(
@@ -30,10 +29,12 @@ export default function RegisterPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (mismatch) {
+
+    if (matchState === "mismatch") {
       alert("Passwords do not match!");
       return;
     }
+
     setLoading(true);
     try {
       const res = await fetch(`http://localhost:3000/users`, {
@@ -50,6 +51,15 @@ export default function RegisterPage() {
 
       if (!res.ok)
         throw new Error(await res.text().catch(() => "Register failed"));
+
+      // Lưu last_name để lần đăng nhập sau header có thể dùng
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lastname", last_name);
+        }
+      } catch {
+        // ignore storage errors
+      }
 
       alert("Account created successfully! Please log in");
       window.location.href = "/login";
@@ -172,7 +182,7 @@ export default function RegisterPage() {
                   href="/login"
                   className="font-medium text-[--primary] hover:underline"
                 >
-                  Register
+                  Login
                 </Link>
               </p>
             </form>
@@ -207,15 +217,15 @@ function Field({
     status === "mismatch"
       ? "bg-red-50 border border-red-400 text-red-600 placeholder:text-red-400"
       : status === "match"
-        ? "bg-green-50 border border-green-500 text-green-700 placeholder:text-green-600"
-        : "bg-[#eaf0ff] text-gray-800 placeholder:text-gray-500";
+      ? "bg-green-50 border border-green-500 text-green-700 placeholder:text-green-600"
+      : "bg-[#eaf0ff] text-gray-800 placeholder:text-gray-500";
 
   const iconColor =
     status === "mismatch"
       ? "text-red-500"
       : status === "match"
-        ? "text-green-600"
-        : "text-gray-600";
+      ? "text-green-600"
+      : "text-gray-600";
 
   const IconSvg = {
     user: (
@@ -294,4 +304,3 @@ function Field({
     </div>
   );
 }
-

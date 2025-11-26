@@ -1,5 +1,8 @@
-"use client";
 
+//Test UI chart with fake realtime data
+
+"use client";
+const USE_FAKE_REALTIME = true;
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import { useEffect, useState } from "react";
 import { apiFetch, getAuthToken } from "@/lib/api";
@@ -68,7 +71,7 @@ function SensorTooltip({ active, payload, label }: SensorTooltipProps) {
   );
 }
 
-export default function DashboardPage() {
+export default function DashboardTestPage() {
   const [token, setToken] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,21 +111,21 @@ export default function DashboardPage() {
             d.type === "relay"
               ? false
               : typeof d.isOn === "boolean"
-                ? d.isOn
-                : typeof d.on === "boolean"
-                  ? d.on
-                  : typeof d.status === "boolean"
-                    ? d.status
-                    : false;
+              ? d.isOn
+              : typeof d.on === "boolean"
+              ? d.on
+              : typeof d.status === "boolean"
+              ? d.status
+              : false;
 
           const icon =
             d.type === "light"
               ? iconMap.light
               : d.type === "fan"
-                ? iconMap.fan
-                : d.type === "speaker"
-                  ? iconMap.speaker
-                  : "/icons/light.png";
+              ? iconMap.fan
+              : d.type === "speaker"
+              ? iconMap.speaker
+              : "/icons/light.png";
 
           return {
             id,
@@ -146,43 +149,66 @@ export default function DashboardPage() {
   // ======================================
   // Connect to WebSocket and realtime data
   // ======================================
+  // ======================================================
+  // 🔥 REAL WS MODE + FAKE REALTIME DEMO MODE
+  // ======================================================
   useEffect(() => {
-    if (!token) return;
+    if (!token && !USE_FAKE_REALTIME) return;
 
+    // ---------------------------------------------
+    // 🟣 FAKE REALTIME MODE
+    // ---------------------------------------------
+    if (USE_FAKE_REALTIME) {
+      const topics = devices
+        .filter((d) => d.type === "sensor")
+        .map((d) => d.mqttTopic)
+        .filter(Boolean);
+
+      if (topics.length === 0) return;
+
+      const interval = setInterval(() => {
+        topics.forEach((topic) => {
+          const fakeValue = Number((20 + Math.random() * 10).toFixed(1));
+
+          const msg = {
+            topic: topic!,
+            time: new Date().toISOString(),
+            value: fakeValue,
+          };
+
+          // Push fake value to dataMap
+          const ts = new Date(msg.time).getTime();
+
+          setDataMap((prev) => {
+            const arr = prev[msg.topic] || [];
+            const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+            return { ...prev, [msg.topic]: nextArr };
+          });
+        });
+      }, 1800); // mỗi 1.8 giây tạo dữ liệu mới
+
+      return () => clearInterval(interval);
+    }
+
+    // ---------------------------------------------
+    // 🟢 REAL BACKEND WEBSOCKET MODE
+    // ---------------------------------------------
     const socket: Socket = io("http://localhost:3000", {
       auth: { token },
     });
 
-    socket.on("connect", () => console.log("Connected WebSocket"));
+    socket.on("sensorData", (msg) => {
+      const ts = new Date(msg.time).getTime();
 
-    socket.on(
-      "sensorData",
-      (msg: { topic: string; time: string; value: number }) => {
-        const ts = new Date(msg.time).getTime();
+      setDataMap((prev) => {
+        const arr = prev[msg.topic] || [];
+        const nextArr = [...arr.slice(-99), { time: ts, value: msg.value }];
+        return { ...prev, [msg.topic]: nextArr };
+      });
+    });
 
-        setDataMap((prev) => {
-          const arr = prev[msg.topic] || [];
-          const nextArr: SensorPoint[] = [
-            ...arr.slice(-99),
-            { time: ts, value: msg.value },
-          ];
-          return { ...prev, [msg.topic]: nextArr };
-        });
-
-        setDevices((prev) =>
-          prev.map((d) =>
-            d.type === "relay" && d.mqttTopic === msg.topic
-              ? { ...d, on: msg.value === 1 }
-              : d
-          )
-        );
-      }
-    );
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [token]);
+    return () => socket.disconnect();
+  }, [token, devices]);
 
   // =====================================
   // Toggle devices
@@ -233,7 +259,6 @@ export default function DashboardPage() {
     <div className="container bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
       <main className="mx-auto max-w-5xl p-6 space-y-8">
-
         {/* DEVICES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {devices
@@ -252,10 +277,11 @@ export default function DashboardPage() {
                     {/* Relay button */}
                     {isRelay ? (
                       <span
-                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${d.on
+                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
+                          d.on
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-gray-100 text-gray-700 border-gray-200"
-                          }`}
+                        }`}
                       >
                         {d.on ? "ON" : "OFF"}
                       </span>
@@ -263,10 +289,11 @@ export default function DashboardPage() {
                       <button
                         onClick={() => toggle(d.id)}
                         disabled={busyId === d.id}
-                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${d.on
+                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
+                          d.on
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-gray-100 text-gray-700 border-gray-200"
-                          }`}
+                        }`}
                       >
                         {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
                       </button>
@@ -312,10 +339,11 @@ export default function DashboardPage() {
               return (
                 <div
                   key={d.id}
-                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${isDanger
+                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${
+                    isDanger
                       ? "border-red-100 bg-red-50/60 shadow-red-100/80"
                       : "border-purple-50 bg-white shadow-purple-100/80"
-                    }`}
+                  }`}
                 >
                   {/* Header card */}
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -329,14 +357,16 @@ export default function DashboardPage() {
                     </div>
 
                     <div
-                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${isDanger
+                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${
+                        isDanger
                           ? "bg-red-100 text-red-700"
                           : "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
-                        }`}
+                      }`}
                     >
                       <span
-                        className={`mr-2 h-2 w-2 rounded-full ${isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
-                          }`}
+                        className={`mr-2 h-2 w-2 rounded-full ${
+                          isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
+                        }`}
                       />
                       {latest !== null ? `Now: ${latest}` : "No data"}
                     </div>

@@ -19,7 +19,9 @@ export default function LoginPage() {
   // check token
   useEffect(() => {
     const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
+      typeof window !== "undefined"
+        ? localStorage.getItem("token") || sessionStorage.getItem("token")
+        : null;
 
     const timer = setTimeout(() => {
       if (token) {
@@ -56,10 +58,26 @@ export default function LoginPage() {
       if (!res.ok) throw new Error("Failed to log in");
       const data = await res.json();
 
+      // Lấy last_name nếu API có trả về user info, fallback sang giá trị đã lưu hoặc username
+      const apiLastName: string | undefined =
+        (data.user && (data.user.last_name || data.user.lastName)) ||
+        data.last_name ||
+        data.lastName;
+
+      const displayName =
+        apiLastName ??
+        (typeof window !== "undefined"
+          ? localStorage.getItem("lastname") ||
+            sessionStorage.getItem("lastname")
+          : null) ??
+        username;
+
       if (remember) {
         localStorage.setItem("token", data.access_token);
+        localStorage.setItem("lastname", displayName);
       } else {
         sessionStorage.setItem("token", data.access_token);
+        sessionStorage.setItem("lastname", displayName);
       }
 
       window.location.href = "/dashboard";

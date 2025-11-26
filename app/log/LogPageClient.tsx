@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-
-// ---- Types -----
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import Loader from "@/components/ui/Loader";
 
 type Device = {
   id: number;
@@ -35,39 +35,30 @@ type DeviceLog = {
   timestamp: string;
 };
 
-type DeviceLogWithDuration = DeviceLog & {
-  duration: number | null;
-};
-
 type SortConfig = {
   key: string;
   direction: "asc" | "desc";
 };
 
-// -------------------------------------
-
 export default function LogPageClient() {
-  const [logs, setLogs] = useState<DeviceLogWithDuration[]>([]);
+  const [logs, setLogs] = useState<DeviceLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: "asc" | "desc";
-  }>({
-    key: "id",
-    direction: "desc",
-  });
+  const [uiLoading, setUiLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setUiLoading(false), 800);
+    return () => clearTimeout(t);
+  }, []);
+
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
 
-  // ---- Fetch logs ----
+  // Load logs
   async function loadLogs() {
     try {
       const res: any = await apiFetch("/relay-controls");
-
-      if (Array.isArray(res.data)) {
-        const processed = calculateDurations(res.data);
-        setLogs(processed);
-      }
+      if (Array.isArray(res.data)) setLogs(res.data);
     } catch (err) {
       console.error("Failed to load logs", err);
     } finally {
@@ -79,8 +70,8 @@ export default function LogPageClient() {
     loadLogs();
   }, []);
 
-  // ---- Helper to get value by key ----
-  function getValue(log: DeviceLogWithDuration, key: string) {
+  // Safe value accessor
+  function getValue(log: DeviceLog, key: string) {
     switch (key) {
       case "device.name":
         return log.device?.name ?? "";
@@ -88,39 +79,14 @@ export default function LogPageClient() {
         return log.user?.username ?? "";
       case "timestamp":
         return log.timestamp ?? "";
-      case "duration":
-        return log.duration ?? 0;
+      case "action":
+        return log.action ?? "";
       default:
         return (log as any)[key] ?? "";
     }
   }
 
-  // ---- Calculate durations between ON and OFF ----
-  function calculateDurations(rawLogs: DeviceLog[]): DeviceLogWithDuration[] {
-    // Sort logs by timestamp ascending
-    const sorted = [...rawLogs].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    const onMap = new Map<number, DeviceLog>();
-    const result = sorted.map((log) => ({ ...log, duration: null as number | null }));
-
-    for (const log of result) {
-      if (log.action === "ON") {
-        onMap.set(log.device.id, log);
-      } else if (log.action === "OFF") {
-        const onLog = onMap.get(log.device.id);
-        if (onLog) {
-          log.duration =
-            new Date(log.timestamp).getTime() - new Date(onLog.timestamp).getTime();
-        }
-      }
-    }
-
-    return result;
-  }
-
-  // ---- Sort handler ----
+  // Handle sort
   function handleSort(key: string) {
     if (sortConfig?.key === key) {
       setSortConfig({
@@ -130,40 +96,25 @@ export default function LogPageClient() {
     } else {
       setSortConfig({ key, direction: "asc" });
     }
+    // về trang 1 sau khi đổi sort
+    setCurrentPage(1);
   }
 
-  // ---- Apply sorting ----
-  const sortedLogs = [...logs].sort((a, b) => {
-    const aVal = getValue(a, sortConfig.key);
-    const bVal = getValue(b, sortConfig.key);
+  // Sorted logs
+  const sortedLogs = [...logs];
+  if (sortConfig) {
+    sortedLogs.sort((a, b) => {
+      const aVal = getValue(a, sortConfig.key);
+      const bVal = getValue(b, sortConfig.key);
 
-    if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  // ---- Format duration helper ----
-  function formatDuration(seconds: number) {
-    if (seconds < 60) {
-      return `${seconds}s`;
-    }
-
-    const mins = seconds / 60;
-    if (mins < 60) {
-      return `${Math.floor(mins)} mins`;
-    }
-
-    const hours = mins / 60;
-    if (hours < 24) {
-      return `${Math.floor(hours)} hours`;
-    }
-
-    const days = hours / 24;
-    return `${Math.floor(days)} days`;
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
   }
 
-  // ---- Pagination ----
-  const totalPages = Math.ceil(sortedLogs.length / rowsPerPage);
+  // Pagination
+  const totalPages = Math.ceil(sortedLogs.length / rowsPerPage) || 1;
   const paginatedLogs = sortedLogs.slice(
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
@@ -171,95 +122,253 @@ export default function LogPageClient() {
 
   const formatTimestamp = (ts: string) =>
     new Date(ts).toLocaleString(undefined, {
-      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
 
-  if (loading) return <div className="p-6 text-lg">Loading logs...</div>;
-
-  // ---- Render UI ----
-  return (
-    <main className="mx-auto max-w-6xl p-6">
-      <h1 className="text-3xl font-semibold mb-6">Device Logs</h1>
-
-      <table className="w-full border border-gray-300 text-sm">
-        <thead className="bg-green-600 text-white">
-          <tr>
-            <Th label="ID" sortKey="id" sortConfig={sortConfig} onSort={handleSort} />
-            <Th label="Device" sortKey="device.name" sortConfig={sortConfig} onSort={handleSort} />
-            <Th label="User" sortKey="user.username" sortConfig={sortConfig} onSort={handleSort} />
-            <Th label="Action" sortKey="action" sortConfig={sortConfig} onSort={handleSort} />
-            <Th label="Timestamp" sortKey="timestamp" sortConfig={sortConfig} onSort={handleSort} />
-            <Th label="Duration" sortKey="duration" sortConfig={sortConfig} onSort={handleSort} />
-          </tr>
-        </thead>
-
-        <tbody>
-          {paginatedLogs.map((log) => (
-            <tr key={log.id} className="hover:bg-gray-50">
-              <td className="border p-2">{log.id}</td>
-              <td className="border p-2">{log.device?.name || "N/A"}</td>
-              <td className="border p-2">{log.user?.username || "N/A"}</td>
-              <td className="border p-2">{log.action}</td>
-              <td className="border p-2">{formatTimestamp(log.timestamp)}</td>
-              <td className="border p-2">
-                {log.duration ? formatDuration(Math.floor(log.duration / 1000)) : "-"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Pagination */}
-      <div className="flex justify-center mt-4 gap-2">
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((p) => p - 1)}
-        >
-          Prev
-        </button>
-
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i + 1}
-            className={`px-3 py-1 border rounded ${currentPage === i + 1 ? "bg-green-600 text-white" : ""
-              }`}
-            onClick={() => setCurrentPage(i + 1)}
-          >
-            {i + 1}
-          </button>
-        ))}
-
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((p) => p + 1)}
-        >
-          Next
-        </button>
+  if (uiLoading || loading) {
+    return (
+      <div className="min-h-screen bg-[#f4f5ff]">
+        <DashboardHeader />
+        <main className="flex h-screen items-center justify-center bg-[var(--color-purple)]">
+          <Loader />
+        </main>
       </div>
-    </main>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f4f5ff]">
+      <DashboardHeader />
+
+      <main className="mx-auto max-w-6xl p-6 space-y-6">
+        {/* PAGE HEADER */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900">
+              Device Logs
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              History of manual and automatic relay actions.
+            </p>
+          </div>
+
+          <div className="rounded-full bg-white/70 px-4 py-2 text-xs text-gray-500 shadow-sm">
+            Total records:{" "}
+            <span className="font-semibold text-[var(--color-purple)]">
+              {logs.length}
+            </span>
+          </div>
+        </div>
+
+        {/* TABLE CARD */}
+        <section className="rounded-2xl border border-purple-50 bg-white/90 p-4 shadow-sm md:p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Activity log
+            </h2>
+            <p className="text-xs text-gray-400">
+              Page {currentPage} of {totalPages}
+            </p>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[var(--color-purple)] text-white">
+                <tr>
+                  <SortableHeader
+                    label="ID"
+                    sortKey="id"
+                    active={sortConfig?.key === "id"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("id")}
+                    className="w-16"
+                  />
+                  <SortableHeader
+                    label="Device"
+                    sortKey="device.name"
+                    active={sortConfig?.key === "device.name"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("device.name")}
+                    className="w-40"
+                  />
+                  <SortableHeader
+                    label="User"
+                    sortKey="user.username"
+                    active={sortConfig?.key === "user.username"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("user.username")}
+                    className="w-40"
+                  />
+                  <SortableHeader
+                    label="Action"
+                    sortKey="action"
+                    active={sortConfig?.key === "action"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("action")}
+                    className="w-32"
+                  />
+                  <SortableHeader
+                    label="Timestamp"
+                    sortKey="timestamp"
+                    active={sortConfig?.key === "timestamp"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("timestamp")}
+                    className="w-56"
+                  />
+                  <th className="whitespace-nowrap px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                    Mode
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {paginatedLogs.map((log, index) => {
+                  const isOn = log.action === "ON";
+                  const isAuto = log.isAutomatic;
+
+                  return (
+                    <tr
+                      key={log.id}
+                      className={index % 2 === 0 ? "bg-white" : "bg-[#faf9ff]"}
+                    >
+                      <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-gray-500">
+                        #{log.id}
+                      </td>
+                      <td className="max-w-[200px] truncate px-4 py-2 text-sm text-gray-800">
+                        {log.device?.name || "N/A"}
+                      </td>
+                      <td className="max-w-[180px] truncate px-4 py-2 text-xs text-gray-700">
+                        {log.user?.username || "N/A"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-xs">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${
+                            isOn
+                              ? "bg-green-50 text-green-700 border border-green-200"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                          }`}
+                        >
+                          <span
+                            className={`mr-1 h-2 w-2 rounded-full ${
+                              isOn ? "bg-green-500" : "bg-red-500"
+                            }`}
+                          />
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-xs text-gray-700">
+                        {formatTimestamp(log.timestamp)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${
+                            isAuto
+                              ? "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {isAuto ? "Automatic" : "Manual"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {paginatedLogs.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-6 text-center text-sm text-gray-500"
+                    >
+                      No logs available.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination controls */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-gray-500">
+              Showing {(currentPage - 1) * rowsPerPage + 1}–
+              {Math.min(currentPage * rowsPerPage, sortedLogs.length)} of{" "}
+              {sortedLogs.length}
+            </span>
+
+            <div className="flex items-center gap-1">
+              <button
+                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                Prev
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button
+                  key={i + 1}
+                  className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${
+                    currentPage === i + 1
+                      ? "bg-[var(--color-purple)] text-white"
+                      : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                  onClick={() => setCurrentPage(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+
+              <button
+                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
 
-// ---- Header cell component for sorting ----
-function Th({
+/* Small component for sortable header */
+function SortableHeader({
   label,
   sortKey,
-  sortConfig,
-  onSort,
+  active,
+  direction,
+  onClick,
+  className = "",
 }: {
   label: string;
   sortKey: string;
-  sortConfig: SortConfig | null;
-  onSort: (key: string) => void;
+  active?: boolean;
+  direction?: "asc" | "desc";
+  onClick: () => void;
+  className?: string;
 }) {
-  const arrow =
-    sortConfig?.key === sortKey ? (sortConfig.direction === "asc" ? "▲" : "▼") : "";
-
   return (
-    <th className="border p-2 cursor-pointer select-none" onClick={() => onSort(sortKey)}>
-      {label} {arrow}
+    <th
+      className={`whitespace-nowrap px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide ${className}`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex items-center gap-1"
+      >
+        <span>{label}</span>
+        {active && (
+          <span className="text-[10px]">{direction === "asc" ? "▲" : "▼"}</span>
+        )}
+      </button>
     </th>
   );
 }
