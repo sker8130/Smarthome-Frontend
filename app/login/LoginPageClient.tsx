@@ -45,39 +45,25 @@ export default function LoginPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
     try {
       const res = await fetch(`http://localhost:3000/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          password,
-        }),
+        body: JSON.stringify({ username, password }),
       });
 
       if (!res.ok) throw new Error("Failed to log in");
+
       const data = await res.json();
 
-      // Lấy last_name nếu API có trả về user info, fallback sang giá trị đã lưu hoặc username
-      const apiLastName: string | undefined =
-        (data.user && (data.user.last_name || data.user.lastName)) ||
-        data.last_name ||
-        data.lastName;
-
-      const displayName =
-        apiLastName ??
-        (typeof window !== "undefined"
-          ? localStorage.getItem("lastname") ||
-            sessionStorage.getItem("lastname")
-          : null) ??
-        username;
-
+      // Store token
       if (remember) {
         localStorage.setItem("token", data.access_token);
-        localStorage.setItem("lastname", displayName);
+        localStorage.setItem("user", JSON.stringify(data.user));
       } else {
         sessionStorage.setItem("token", data.access_token);
-        sessionStorage.setItem("lastname", displayName);
+        sessionStorage.setItem("user", JSON.stringify(data.user));
       }
 
       window.location.href = "/dashboard";
