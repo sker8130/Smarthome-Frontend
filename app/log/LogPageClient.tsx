@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import Loader from "@/components/ui/Loader";
@@ -54,6 +54,40 @@ export default function LogPageClient() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
 
+  // Compute durations
+  const durationsMap = useMemo(() => {
+    const map = new Map<number, number>();
+
+    // Sort by timestamp ascending
+    const byTime = [...logs].sort((a, b) => {
+      const ta = new Date(a.timestamp).getTime() || 0;
+      const tb = new Date(b.timestamp).getTime() || 0;
+      return ta - tb;
+    });
+
+    const lastOn = new Map<number, number>();
+
+    for (const log of byTime) {
+      const devId = log.device?.id;
+      if (devId == null) continue;
+      const ts = new Date(log.timestamp).getTime();
+      if (isNaN(ts)) continue;
+
+      if (log.action === "ON") {
+        lastOn.set(devId, ts);
+      } else if (log.action === "OFF") {
+        const onTs = lastOn.get(devId);
+        if (onTs != null && onTs <= ts) {
+          map.set(log.id, ts - onTs);
+          // Clear the paired ON
+          lastOn.delete(devId);
+        }
+      }
+    }
+
+    return map;
+  }, [logs]);
+
   // Load logs
   async function loadLogs() {
     try {
@@ -73,6 +107,8 @@ export default function LogPageClient() {
   // Safe value accessor
   function getValue(log: DeviceLog, key: string) {
     switch (key) {
+      case "duration":
+        return durationsMap.get(log.id) ?? -1;
       case "device.name":
         return log.device?.name ?? "";
       case "user.username":
@@ -129,6 +165,37 @@ export default function LogPageClient() {
       minute: "2-digit",
       second: "2-digit",
     });
+
+  // Format duration
+  function formatDuration(ms: number) {
+    if (ms == null || isNaN(ms) || ms < 0) return "-";
+    const totalSeconds = Math.floor(ms / 1000);
+    const seconds = totalSeconds % 60;
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const days = Math.floor(totalSeconds / 86400);
+
+    // < 60s => show seconds
+    if (totalSeconds < 60) {
+      return `${seconds}s`;
+    }
+
+    // >= 60s and < 60min => show minutes (and seconds)
+    if (totalSeconds < 3600) {
+      const mins = Math.floor(totalSeconds / 60);
+      return `${mins}m ${String(seconds).padStart(2, "0")}s`;
+    }
+
+    // >= 60min and < 24h => show hours (and minutes)
+    if (totalSeconds < 86400) {
+      const hrs = Math.floor(totalSeconds / 3600);
+      return `${hrs}h ${String(minutes).padStart(2, "0")}m`;
+    }
+
+    // >= 24h => show days (and hours)
+    const ds = days;
+    return `${ds}d ${String(hours).padStart(2, "0")}h`;
+  }
 
   if (uiLoading || loading) {
     return (
@@ -220,6 +287,14 @@ export default function LogPageClient() {
                     onClick={() => handleSort("timestamp")}
                     className="w-56"
                   />
+                  <SortableHeader
+                    label="Duration"
+                    sortKey="duration"
+                    active={sortConfig?.key === "duration"}
+                    direction={sortConfig?.direction}
+                    onClick={() => handleSort("duration")}
+                    className="w-40"
+                  />
                   <th className="whitespace-nowrap px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">
                     Mode
                   </th>
@@ -229,7 +304,9 @@ export default function LogPageClient() {
               <tbody className="divide-y divide-gray-100 bg-white">
                 {paginatedLogs.map((log, index) => {
                   const isOn = log.action === "ON";
-                  const isAuto = log.isAutomatic;
+                  // Determine if automatic device
+                  const isAuto =
+                    Boolean(log.isAutomatic) || /auto/i.test(log.device?.name ?? "");
 
                   return (
                     <tr
@@ -243,20 +320,20 @@ export default function LogPageClient() {
                         {log.device?.name || "N/A"}
                       </td>
                       <td className="max-w-[180px] truncate px-4 py-2 text-xs text-gray-700">
-                        {log.user?.username || "N/A"}
+                        {log.user
+                          ? `${log.user.first_name || ""} ${log.user.last_name || ""}`.trim() || log.user.username
+                          : "N/A"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 text-xs">
                         <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${
-                            isOn
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${isOn
                               ? "bg-green-50 text-green-700 border border-green-200"
                               : "bg-red-50 text-red-700 border border-red-200"
-                          }`}
+                            }`}
                         >
                           <span
-                            className={`mr-1 h-2 w-2 rounded-full ${
-                              isOn ? "bg-green-500" : "bg-red-500"
-                            }`}
+                            className={`mr-1 h-2 w-2 rounded-full ${isOn ? "bg-green-500" : "bg-red-500"
+                              }`}
                           />
                           {log.action}
                         </span>
@@ -264,13 +341,23 @@ export default function LogPageClient() {
                       <td className="whitespace-nowrap px-4 py-2 text-xs text-gray-700">
                         {formatTimestamp(log.timestamp)}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-2 text-xs text-gray-700">
+                        {log.action === "OFF" ? (
+                          durationsMap.has(log.id) ? (
+                            formatDuration(durationsMap.get(log.id) as number)
+                          ) : (
+                            "-"
+                          )
+                        ) : (
+                          ""
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
                         <span
-                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${
-                            isAuto
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${isAuto
                               ? "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
                               : "bg-gray-100 text-gray-700"
-                          }`}
+                            }`}
                         >
                           {isAuto ? "Automatic" : "Manual"}
                         </span>
@@ -282,7 +369,7 @@ export default function LogPageClient() {
                 {paginatedLogs.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-6 text-center text-sm text-gray-500"
                     >
                       No logs available.
@@ -313,11 +400,10 @@ export default function LogPageClient() {
               {Array.from({ length: totalPages }, (_, i) => (
                 <button
                   key={i + 1}
-                  className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${
-                    currentPage === i + 1
+                  className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${currentPage === i + 1
                       ? "bg-[var(--color-purple)] text-white"
                       : "border border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
+                    }`}
                   onClick={() => setCurrentPage(i + 1)}
                 >
                   {i + 1}

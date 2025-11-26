@@ -5,38 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type JwtPayload = {
-  username?: string;
-  first_name?: string;
-  last_name?: string;
-  [key: string]: any;
-};
-
-function decodeJwtInfo() {
-  if (typeof window === "undefined") return null;
-
-  const token =
-    localStorage.getItem("token") || sessionStorage.getItem("token");
-  if (!token) return null;
-
-  try {
-    const payloadBase64 = token.split(".")[1];
-    if (!payloadBase64) return null;
-
-    const jsonString = atob(
-      payloadBase64.replace(/-/g, "+").replace(/_/g, "/")
-    );
-    const payload: JwtPayload = JSON.parse(jsonString);
-
-    return (
-      payload.last_name || payload.first_name || payload.username || "User"
-    );
-  } catch (err) {
-    console.error("Failed to decode JWT", err);
-    return "User";
-  }
-}
-
 export default function DashboardHeader() {
   const pathname = usePathname();
   const router = useRouter();
@@ -44,9 +12,17 @@ export default function DashboardHeader() {
 
   // Load user from JWT
   useEffect(() => {
-    const name = decodeJwtInfo();
-    if (name) setDisplayName(name);
+    const userStr = localStorage.getItem("user") || sessionStorage.getItem("user");
+
+    if (userStr) {
+      const user = JSON.parse(userStr);
+
+      const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+
+      setDisplayName(fullName || user.username || "User");
+    }
   }, []);
+
 
   // Logout handler
   function logout() {
@@ -92,11 +68,10 @@ export default function DashboardHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-full px-5 py-2 text-xl font-semibold transition ${
-                    isActive
-                      ? "bg-[var(--color-darkpurple)] text-white"
-                      : "text-white hover:bg-[var(--color-darkpurple)]/70"
-                  }`}
+                  className={`rounded-full px-5 py-2 text-xl font-semibold transition ${isActive
+                    ? "bg-[var(--color-darkpurple)] text-white"
+                    : "text-white hover:bg-[var(--color-darkpurple)]/70"
+                    }`}
                 >
                   {item.label}
                 </Link>

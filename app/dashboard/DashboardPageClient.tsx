@@ -108,21 +108,21 @@ export default function DashboardPage() {
             d.type === "relay"
               ? false
               : typeof d.isOn === "boolean"
-              ? d.isOn
-              : typeof d.on === "boolean"
-              ? d.on
-              : typeof d.status === "boolean"
-              ? d.status
-              : false;
+                ? d.isOn
+                : typeof d.on === "boolean"
+                  ? d.on
+                  : typeof d.status === "boolean"
+                    ? d.status
+                    : false;
 
           const icon =
             d.type === "light"
               ? iconMap.light
               : d.type === "fan"
-              ? iconMap.fan
-              : d.type === "speaker"
-              ? iconMap.speaker
-              : "/icons/light.png";
+                ? iconMap.fan
+                : d.type === "speaker"
+                  ? iconMap.speaker
+                  : "/icons/light.png";
 
           return {
             id,
@@ -252,11 +252,10 @@ export default function DashboardPage() {
                     {/* Relay button */}
                     {isRelay ? (
                       <span
-                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${
-                          d.on
+                        className={`rounded-full px-3 py-1 text-sm border cursor-not-allowed ${d.on
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-gray-100 text-gray-700 border-gray-200"
-                        }`}
+                          }`}
                       >
                         {d.on ? "ON" : "OFF"}
                       </span>
@@ -264,11 +263,10 @@ export default function DashboardPage() {
                       <button
                         onClick={() => toggle(d.id)}
                         disabled={busyId === d.id}
-                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${
-                          d.on
+                        className={`rounded-full px-3 py-1 text-sm border cursor-pointer ${d.on
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-gray-100 text-gray-700 border-gray-200"
-                        }`}
+                          }`}
                       >
                         {busyId === d.id ? "..." : d.on ? "ON" : "OFF"}
                       </button>
@@ -314,11 +312,10 @@ export default function DashboardPage() {
               return (
                 <div
                   key={d.id}
-                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${
-                    isDanger
+                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${isDanger
                       ? "border-red-100 bg-red-50/60 shadow-red-100/80"
                       : "border-purple-50 bg-white shadow-purple-100/80"
-                  }`}
+                    }`}
                 >
                   {/* Header card */}
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -332,16 +329,14 @@ export default function DashboardPage() {
                     </div>
 
                     <div
-                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${
-                        isDanger
+                      className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold ${isDanger
                           ? "bg-red-100 text-red-700"
                           : "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
-                      }`}
+                        }`}
                     >
                       <span
-                        className={`mr-2 h-2 w-2 rounded-full ${
-                          isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
-                        }`}
+                        className={`mr-2 h-2 w-2 rounded-full ${isDanger ? "bg-red-500" : "bg-[var(--color-purple)]"
+                          }`}
                       />
                       {latest !== null ? `Now: ${latest}` : "No data"}
                     </div>
