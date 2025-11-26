@@ -125,3 +125,31 @@ html, body {
   50% { transform: translate(200%, 100%); }
   100% { transform: translate(100%, 100%); }
 }
+
+/* ===== Custom Brightness Slider ===== */
+.slider-track {
+  background: linear-gradient(
+    to right,
+    var(--color-purple) 0%,
+    var(--color-purple) calc(var(--value) * 1%),
+    #d3d3d3 calc(var(--value) * 1%),
+    #d3d3d3 100%
+  );
+}
+
+.slider-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-purple);
+  cursor: pointer;
+}
+
+.slider-track::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-purple);
+  cursor: pointer;
+}
