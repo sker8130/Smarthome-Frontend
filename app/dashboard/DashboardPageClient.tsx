@@ -231,7 +231,7 @@ export default function DashboardPage() {
   // Render page
   // ==========================================
   return (
-    <div className="container bg-[var(--color-purple)] text-white min-h-screen">
+    <div className="bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
       <main className="mx-auto max-w-5xl p-6 space-y-8">
 
