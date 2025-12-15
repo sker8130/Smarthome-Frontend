@@ -14,6 +14,7 @@ import {
   Area,
 } from "recharts";
 import Loader from "@/components/ui/Loader";
+import BrightnessControl from "@/components/devices/BrightnessControl";
 
 type ApiDevice = {
   id: number | string;
@@ -230,7 +231,7 @@ export default function DashboardPage() {
   // Render page
   // ==========================================
   return (
-    <div className="container bg-[var(--color-purple)] text-white min-h-screen">
+    <div className="bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
       <main className="mx-auto max-w-5xl p-6 space-y-8">
 
@@ -282,6 +283,9 @@ export default function DashboardPage() {
                 </article>
               );
             })}
+          <div className="lg:col-span-2">
+            <BrightnessControl deviceId="1" initialBrightness={100} />
+          </div>
         </section>
 
         {/* SENSOR CHARTS */}

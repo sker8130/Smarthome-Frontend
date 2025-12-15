@@ -149,34 +149,73 @@ export default function HomePageClient() {
             </div>
 
             {/* Form */}
-            <form className="bg-white rounded-2xl p-6 md:p-8 shadow-lg space-y-4">
+            <form
+              className="bg-white rounded-2xl p-6 md:p-8 shadow-lg space-y-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+
+                const form = e.currentTarget;
+                const formData = new FormData(form);
+
+                try {
+                  const res = await fetch("https://formspree.io/f/xkgdajrk", {
+                    method: "POST",
+                    body: formData,
+                    headers: {
+                      Accept: "application/json",
+                    },
+                  });
+
+                  if (res.ok) {
+                    window.location.href = "/thankyou";
+                  } else {
+                    alert("Gửi không thành công, vui lòng thử lại.");
+                  }
+                } catch (error) {
+                  alert("Có lỗi xảy ra, vui lòng thử lại sau.");
+                }
+              }}
+            >
+              {/* Full Name */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-gray-600">
                   Full Name
                 </label>
                 <input
                   type="text"
+                  name="name"
+                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-purple)]/30"
                 />
               </div>
+
+              {/* Email */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-gray-600">
                   Email
                 </label>
                 <input
                   type="email"
+                  name="email"
+                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-purple)]/30"
                 />
               </div>
+
+              {/* Solution / Message */}
               <div className="space-y-2">
                 <label className="text-xs font-medium text-gray-600">
                   Solution
                 </label>
                 <textarea
                   rows={3}
+                  name="message"
+                  required
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-purple)]/30"
                 />
               </div>
+
+              {/* Submit */}
               <button
                 type="submit"
                 className="w-full bg-[var(--color-purple)] text-white py-2.5 rounded-lg font-semibold hover:bg-[var(--color-purple)]/90 transition"
