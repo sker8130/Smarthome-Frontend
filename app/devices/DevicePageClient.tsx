@@ -353,6 +353,7 @@ export default function DevicePageClient() {
                       <option value="fan">Fan</option>
                       <option value="speaker">Speaker</option>
                       <option value="relay">Relay</option>
+                      <option value="brightness">Brightness</option>
                     </select>
                   </div>
 

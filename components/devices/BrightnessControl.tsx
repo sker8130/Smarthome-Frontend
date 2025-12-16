@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
 interface Props {
@@ -14,13 +14,13 @@ export default function BrightnessControl({
 }: Props) {
   const [value, setValue] = useState(initialBrightness);
   const [loading, setLoading] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function updateBrightness(v: number) {
-    setValue(v);
     setLoading(true);
     try {
-      await apiFetch(`/devices/${deviceId}`, {
-        method: "PATCH",
+      await apiFetch(`/devices/${deviceId}/brightness`, {
+        method: "POST",
         body: JSON.stringify({ brightness: v }),
       });
     } catch (err) {
@@ -29,6 +29,21 @@ export default function BrightnessControl({
       setLoading(false);
     }
   }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = Number(e.target.value);
+    setValue(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      updateBrightness(v);
+    }, 400);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
 
   return (
     <div className="w-full rounded-2xl bg-[var(--color-lightpurple)] text-white p-6 space-y-3">
@@ -45,9 +60,10 @@ export default function BrightnessControl({
           min={0}
           max={100}
           value={value}
-          onChange={(e) => updateBrightness(Number(e.target.value))}
+          onChange={handleChange}
           className="flex-1 appearance-none h-2 rounded-full slider-track"
           style={{ "--value": value } as any}
+          disabled={loading}
         />
       </div>
     </div>
