@@ -27,6 +27,7 @@ type ApiDevice = {
   on?: boolean;
   status?: boolean;
   mqttTopic?: string;
+  brightness?: number;
 };
 
 type Device = {
@@ -36,6 +37,7 @@ type Device = {
   icon: string;
   on: boolean;
   mqttTopic?: string;
+  brightness?: number;
 };
 
 interface SensorPoint {
@@ -132,6 +134,7 @@ export default function DashboardPage() {
             on,
             mqttTopic: d.mqttTopic,
             type: d.type ?? "device",
+            brightness: typeof d.brightness === "number" ? d.brightness : undefined,
           };
         });
 
@@ -230,6 +233,7 @@ export default function DashboardPage() {
   // ==========================================
   // Render page
   // ==========================================
+  const brightnessDevices = devices.filter((d) => d.type === "brightness");
   return (
     <div className="bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
@@ -238,7 +242,7 @@ export default function DashboardPage() {
         {/* DEVICES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {devices
-            .filter((d) => d.type !== "sensor")
+            .filter((d) => d.type !== "sensor" && d.type !== "brightness")
             .map((d) => {
               const isRelay = d.type === "relay";
 
@@ -283,9 +287,14 @@ export default function DashboardPage() {
                 </article>
               );
             })}
-          <div className="lg:col-span-2">
-            <BrightnessControl deviceId="1" initialBrightness={100} />
-          </div>
+          {brightnessDevices.map((bd) => (
+            <div className="lg:col-span-2" key={bd.id}>
+              <BrightnessControl
+                deviceId={bd.id}
+                initialBrightness={typeof bd.brightness === "number" ? bd.brightness : 100}
+              />
+            </div>
+          ))}
         </section>
 
         {/* SENSOR CHARTS */}
@@ -301,7 +310,7 @@ export default function DashboardPage() {
               }));
 
               const latest = arr.length ? arr[arr.length - 1].value : null;
-              const isTemperature = d.name === "Temperature";
+              const isTemperature = d.name === "Temperature Sensor";
               const isDanger = isTemperature && latest !== null && latest >= 28;
 
               // Dynamic Y domain
@@ -310,16 +319,13 @@ export default function DashboardPage() {
               const maxY = values.length > 0 ? Math.max(...values) : 10;
 
               // Chart color (normal or danger)
-              const lineColor = isDanger ? "#d60000" : "#7B79DA";
+              const lineColor = isDanger ? "#D60000" : "#7B79DA";
               const gradientId = `sensorGradient-${d.id}`;
 
               return (
                 <div
                   key={d.id}
-                  className={`rounded-2xl border p-4 md:p-5 shadow-sm ${isDanger
-                      ? "border-red-100 bg-red-50/60 shadow-red-100/80"
-                      : "border-purple-50 bg-white shadow-purple-100/80"
-                    }`}
+                  className="rounded-2xl border p-4 md:p-5 shadow-sm border-purple-50 bg-white shadow-purple-100/80"
                 >
                   {/* Header card */}
                   <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -357,16 +363,8 @@ export default function DashboardPage() {
                           x2="0"
                           y2="1"
                         >
-                          <stop
-                            offset="0%"
-                            stopColor={lineColor}
-                            stopOpacity={0.4}
-                          />
-                          <stop
-                            offset="90%"
-                            stopColor={lineColor}
-                            stopOpacity={0.03}
-                          />
+                          <stop offset="0%" stopColor="#7B79DA" stopOpacity={0.4} />
+                          <stop offset="90%" stopColor="#7B79DA" stopOpacity={0.03} />
                         </linearGradient>
                       </defs>
 
