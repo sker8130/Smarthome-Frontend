@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import Loader from "@/components/ui/Loader";
 
@@ -44,6 +45,9 @@ export default function LogPageClient() {
   const [logs, setLogs] = useState<DeviceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [uiLoading, setUiLoading] = useState(true);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [selectedUser, setSelectedUser] = useState<string>("");
 
   useEffect(() => {
     const t = setTimeout(() => setUiLoading(false), 800);
@@ -137,7 +141,36 @@ export default function LogPageClient() {
   }
 
   // Sorted logs
-  const sortedLogs = [...logs];
+  // Filter by date range first
+  const filteredLogs = useMemo(() => {
+    let base = logs;
+    if (startDate || endDate) {
+      const startTs = startDate ? new Date(startDate).getTime() : -Infinity;
+      const endTs = endDate
+        ? new Date(new Date(endDate).getTime() + 24 * 60 * 60 * 1000 - 1).getTime()
+        : Infinity;
+      base = base.filter((log) => {
+        const ts = new Date(log.timestamp).getTime();
+        if (isNaN(ts)) return false;
+        return ts >= startTs && ts <= endTs;
+      });
+    }
+
+    if (selectedUser) {
+      const key = selectedUser.toLowerCase();
+      base = base.filter((log) => {
+        const uname = (log.user?.username || "").toLowerCase();
+        const fullname = `${log.user?.first_name || ""} ${log.user?.last_name || ""}`
+          .trim()
+          .toLowerCase();
+        return uname.includes(key) || fullname.includes(key);
+      });
+    }
+
+    return base;
+  }, [logs, startDate, endDate, selectedUser]);
+
+  const sortedLogs = [...filteredLogs];
   if (sortConfig) {
     sortedLogs.sort((a, b) => {
       const aVal = getValue(a, sortConfig.key);
@@ -155,6 +188,25 @@ export default function LogPageClient() {
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
   );
+
+  // Chart data for durations (use filtered logs to reflect current filter)
+  const durationChartData = useMemo(() => {
+    // Use only OFF actions with a valid paired duration
+    const offLogs = filteredLogs.filter((l) => l.action === "OFF");
+    return offLogs.map((l) => {
+      const dur = durationsMap.get(l.id) ?? 0;
+      return {
+        time: new Date(l.timestamp).toLocaleString(undefined, {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        durationHours: Math.max(0, +(dur / 3600000).toFixed(2)),
+        device: l.device?.name ?? "Unknown",
+      };
+    });
+  }, [filteredLogs, durationsMap]);
 
   const formatTimestamp = (ts: string) =>
     new Date(ts).toLocaleString(undefined, {
@@ -215,22 +267,86 @@ export default function LogPageClient() {
       <main className="mx-auto max-w-6xl p-6 space-y-6">
         {/* PAGE HEADER */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-gray-900">
-              Device Logs
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              History of manual and automatic relay actions.
-            </p>
+          <h1 className="text-3xl font-semibold text-gray-900">Device Logs</h1>
+        </div>
+
+        {/* FILTER BAR */}
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 rounded-2xl bg-white/70 px-4 py-4 text-sm text-gray-700 shadow-sm">
+            <label className="font-semibold">From</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-md border border-gray-200 px-2 py-1 text-sm"
+            />
+            <label className="ml-2 font-semibold">To</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-md border border-gray-200 px-2 py-1 text-sm"
+            />
+            <label className="ml-4 font-semibold">User</label>
+            <input
+              type="text"
+              placeholder="Search user..."
+              value={selectedUser}
+              onChange={(e) => {
+                setSelectedUser(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-md border border-gray-200 px-2 py-1 text-sm w-40"
+            />
+            <button
+              className="ml-2 rounded-full border border-gray-200 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                setSelectedUser("");
+                setCurrentPage(1);
+              }}
+            >
+              Clear
+            </button>
           </div>
 
-          <div className="rounded-full bg-white/70 px-4 py-2 text-xs text-gray-500 shadow-sm">
-            Total records:{" "}
+          <div className="rounded-full bg-white/70 px-4 py-2 text-sm text-gray-500 shadow-sm">
+            Total records: {" "}
             <span className="font-semibold text-[var(--color-purple)]">
-              {logs.length}
+              {sortedLogs.length}
             </span>
           </div>
         </div>
+
+        {/* DURATION CHART */}
+        <section className="rounded-2xl border border-purple-50 bg-white/90 p-4 shadow-sm md:p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+              Usage Duration (hours)
+            </h2>
+          </div>
+          <div className="w-full" style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={durationChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7f3" />
+                <XAxis dataKey="time" tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={{ stroke: "#e5e7f3" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={{ stroke: "#e5e7f3" }} />
+                <Tooltip cursor={{ fill: "#f9fafb" }} formatter={(value: any) => [`${value} h`, "Duration"]} labelFormatter={(label: any, payload: any) => {
+                  const item = payload && payload[0] && payload[0].payload;
+                  return item ? `${label} • ${item.device}` : label;
+                }} />
+                <Bar dataKey="durationHours" fill="#7B79DA" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
 
         {/* TABLE CARD */}
         <section className="rounded-2xl border border-purple-50 bg-white/90 p-4 shadow-sm md:p-6">
@@ -327,8 +443,8 @@ export default function LogPageClient() {
                       <td className="whitespace-nowrap px-4 py-2 text-xs">
                         <span
                           className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${isOn
-                              ? "bg-green-50 text-green-700 border border-green-200"
-                              : "bg-red-50 text-red-700 border border-red-200"
+                            ? "bg-green-50 text-green-700 border border-green-200"
+                            : "bg-red-50 text-red-700 border border-red-200"
                             }`}
                         >
                           <span
@@ -355,8 +471,8 @@ export default function LogPageClient() {
                       <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
                         <span
                           className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${isAuto
-                              ? "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
-                              : "bg-gray-100 text-gray-700"
+                            ? "bg-[var(--color-purple)]/10 text-[var(--color-purple)]"
+                            : "bg-gray-100 text-gray-700"
                             }`}
                         >
                           {isAuto ? "Automatic" : "Manual"}
@@ -401,8 +517,8 @@ export default function LogPageClient() {
                 <button
                   key={i + 1}
                   className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${currentPage === i + 1
-                      ? "bg-[var(--color-purple)] text-white"
-                      : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+                    ? "bg-[var(--color-purple)] text-white"
+                    : "border border-gray-200 text-gray-700 hover:bg-gray-50"
                     }`}
                   onClick={() => setCurrentPage(i + 1)}
                 >
