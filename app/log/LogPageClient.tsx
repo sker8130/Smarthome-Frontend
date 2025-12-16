@@ -193,10 +193,12 @@ export default function LogPageClient() {
   const durationChartData = useMemo(() => {
     // Use only OFF actions with a valid paired duration
     const offLogs = filteredLogs.filter((l) => l.action === "OFF");
-    return offLogs.map((l) => {
+    const data = offLogs.map((l) => {
       const dur = durationsMap.get(l.id) ?? 0;
+      const ts = new Date(l.timestamp).getTime();
       return {
-        time: new Date(l.timestamp).toLocaleString(undefined, {
+        ts,
+        time: new Date(ts).toLocaleString(undefined, {
           month: "2-digit",
           day: "2-digit",
           hour: "2-digit",
@@ -206,6 +208,12 @@ export default function LogPageClient() {
         device: l.device?.name ?? "Unknown",
       };
     });
+
+    // Sort by timestamp ascending so X axis increases left→right
+    data.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+    // Remove helper ts before returning
+    return data.map(({ ts: _ts, ...rest }) => rest);
   }, [filteredLogs, durationsMap]);
 
   const formatTimestamp = (ts: string) =>
