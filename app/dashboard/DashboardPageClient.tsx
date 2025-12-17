@@ -153,7 +153,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!token) return;
 
-    const socket: Socket = io("http://localhost:3000", {
+    const socket: Socket = io(process.env.NEXT_PUBLIC_API_URL as string, {
       auth: { token },
     });
 
