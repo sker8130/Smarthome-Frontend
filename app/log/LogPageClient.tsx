@@ -67,7 +67,7 @@ export default function LogPageClient() {
   const [editThreshold, setEditThreshold] = useState<string>("");
   const [ruleActionLoading, setRuleActionLoading] = useState(false);
 
-  // Front-end check: only one watch rule per topic at a time
+  // Only one watch rule per topic at a time
   const isTopicWatched = (t: string, excludeId?: number) =>
     rules.some((r) => r.topic === t && (excludeId == null || r.id !== excludeId));
 
@@ -86,6 +86,23 @@ export default function LogPageClient() {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+
+  // Build compact pagination items: [1, ..., c-1, c, c+1, ..., last]
+  const buildPageItems = (current: number, total: number): Array<number | string> => {
+    const items: Array<number | string> = [];
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) items.push(i);
+      return items;
+    }
+    const left = Math.max(2, current - 1);
+    const right = Math.min(total - 1, current + 1);
+    items.push(1);
+    if (left > 2) items.push("...");
+    for (let i = left; i <= right; i++) items.push(i);
+    if (right < total - 1) items.push("...");
+    items.push(total);
+    return items;
+  };
 
   // Compute durations
   const durationsMap = useMemo(() => {
@@ -236,8 +253,16 @@ export default function LogPageClient() {
 
   // Chart data for durations (use filtered logs to reflect current filter)
   const durationChartData = useMemo(() => {
-    // Use only OFF actions with a valid paired duration
-    const offLogs = filteredLogs.filter((l) => l.action === "OFF");
+    // Use only OFF actions with a valid paired duration and sort by time ascending
+    const offLogs = filteredLogs
+      .filter((l) => l.action === "OFF")
+      .slice()
+      .sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime() || 0;
+        const tb = new Date(b.timestamp).getTime() || 0;
+        return ta - tb;
+      });
+
     return offLogs.map((l) => {
       const dur = durationsMap.get(l.id) ?? 0;
       return {
@@ -726,34 +751,43 @@ export default function LogPageClient() {
             </span>
 
             <div className="flex items-center gap-1">
-              <button
-                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => p - 1)}
-              >
-                Prev
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${currentPage === i + 1
-                    ? "bg-[var(--color-purple)] text-white"
-                    : "border border-gray-200 text-gray-700 hover:bg-gray-50"
-                    }`}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-
-              <button
-                className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-              >
-                Next
-              </button>
+              {(() => {
+                const items = buildPageItems(currentPage, totalPages);
+                return (
+                  <>
+                    <button
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => p - 1)}
+                    >
+                      Prev
+                    </button>
+                    {items.map((it, idx) =>
+                      typeof it === 'number' ? (
+                        <button
+                          key={`lp-${it}`}
+                          className={`min-w-[32px] rounded-full px-3 py-1 text-xs font-medium ${currentPage === it
+                            ? "bg-[var(--color-purple)] text-white"
+                            : "border border-gray-200 text-gray-700 hover:bg-gray-50"}
+                          `}
+                          onClick={() => setCurrentPage(it)}
+                        >
+                          {it}
+                        </button>
+                      ) : (
+                        <span key={`ld-${idx}`} className="px-2 text-xs text-gray-500">…</span>
+                      )
+                    )}
+                    <button
+                      className="rounded-full border border-gray-200 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => p + 1)}
+                    >
+                      Next
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </section>

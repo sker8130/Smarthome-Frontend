@@ -263,11 +263,15 @@ export default function DashboardPage() {
   // ==========================================
   // Render page
   // ==========================================
+  // Sort devices by name (A → Z) once, then derive each section
+  const devicesByName = [...devices].sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+  );
 
-  const brightnessDevices = devices.filter((d) => d.type === "brightness");
+  const brightnessDevices = devicesByName.filter((d) => d.type === "brightness");
 
   // Get sensor devices with mqttTopic (only sensors have data)
-  const sensorDevices = devices.filter((d) => d.type === "sensor" && !!d.mqttTopic);
+  const sensorDevices = devicesByName.filter((d) => d.type === "sensor" && !!d.mqttTopic);
   return (
     <div className="bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
@@ -275,7 +279,7 @@ export default function DashboardPage() {
 
         {/* DEVICES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {devices
+          {devicesByName
             .filter((d) => d.type !== "sensor" && d.type !== "brightness")
             .map((d) => {
               const isRelay = d.type === "relay";
@@ -316,7 +320,7 @@ export default function DashboardPage() {
                     {d.name}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Topic: {d.mqttTopic || "—"}
+                    Type: {d.type || "—"}
                   </p>
                 </article>
               );
@@ -333,7 +337,11 @@ export default function DashboardPage() {
 
         {/* SENSOR CHARTS */}
         <section className="grid grid-cols-1 gap-8">
-          {sensorDevices.map((d) => {
+          {[...sensorDevices]
+            .sort((a, b) =>
+              (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+            )
+            .map((d) => {
               const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
 
               const chartData = arr.map((p) => ({

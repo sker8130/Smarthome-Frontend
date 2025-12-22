@@ -48,7 +48,7 @@ export default function BrightnessControl({
   return (
     <div className="w-full rounded-2xl bg-[var(--color-lightpurple)] text-white p-6 space-y-3">
       {/* Title */}
-      <h2 className="text-center text-xl font-semibold">Brightness</h2>
+      <h2 className="text-center text-xl font-semibold">LED Brightness</h2>
 
       {/* Slider Container */}
       <div className="rounded-full bg-white py-4 px-6 flex items-center gap-4 shadow-card">

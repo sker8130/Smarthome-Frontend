@@ -39,6 +39,85 @@ export default function DevicePageClient() {
     description: "",
   });
 
+  // Preset map
+  const devicePresets = [
+    {
+      label: "LED Light",
+      type: "light",
+      topic: "27C45UV/feeds/V11",
+      description:
+        "A standard lighting fixture that uses LED technology for illumination. Its state (on/off) and sometimes brightness are controlled remotely.",
+    },
+    {
+      label: "LED Light Auto",
+      type: "light",
+      topic: "27C45UV/feeds/V14",
+      description:
+        "An LED lighting unit with automated control capabilities, allowing it to be scheduled or activated based on conditions (e.g., motion or light levels).",
+    },
+    {
+      label: "LED Brightness",
+      type: "brightness",
+      topic: "27C45UV/feeds/V12",
+      description:
+        "Controls the luminous output of the LEDs, allowing the user to increase or decrease the light intensity.",
+    },
+    {
+      label: "Fan",
+      type: "fan",
+      topic: "27C45UV/feeds/V10",
+      description:
+        "A motor-driven appliance used to circulate air and provide cooling. It is controlled manually or remotely via the app.",
+    },
+    {
+      label: "Fan Auto",
+      type: "fan",
+      topic: "27C45UV/feeds/V15",
+      description:
+        "A fan that can be programmed or triggered by sensor data (e.g., temperature) to adjust its speed or turn on/off without manual input.",
+    },
+    {
+      label: "Speaker",
+      type: "speaker",
+      topic: "27C45UV/feeds/V13",
+      description:
+        "An audio output device used for playing sounds, music, or voice notifications. It can be integrated for alerts or home entertainment systems.",
+    },
+    {
+      label: "Relay Switch",
+      type: "relay",
+      topic: "27C45UV/feeds/V16",
+      description:
+        "An electrically operated switch used to turn devices (like lights, fans, or appliances) on or off remotely by controlling the power supply.",
+    },
+    {
+      label: "Humidity Sensor",
+      type: "sensor",
+      topic: "27C45UV/feeds/V2",
+      description:
+        "A device that measures the amount of water vapor (humidity) in the air. Used for monitoring environmental conditions and optimizing indoor climate.",
+    },
+    {
+      label: "Temperature Sensor",
+      type: "sensor",
+      topic: "27C45UV/feeds/V1",
+      description:
+        "A device that measures the heat level (temperature) of its surroundings. Essential for climate control and thermal monitoring.",
+    },
+    {
+      label: "Light Sensor",
+      type: "sensor",
+      topic: "27C45UV/feeds/V4",
+      description:
+        "A component that detects and measures the intensity of ambient light. Often used to automatically control lights or blinds.",
+    },
+  ] as const;
+  const [selectedPreset, setSelectedPreset] = useState<string>("");
+
+  function findPresetByTypeTopic(type?: string, topic?: string) {
+    return devicePresets.find(p => p.type === (type || "") && p.topic === (topic || ""));
+  }
+
   const sortedDevices = [...devices];
   if (sortConfig) {
     sortedDevices.sort((a, b) => {
@@ -89,6 +168,8 @@ export default function DevicePageClient() {
       mqttTopic: item.mqttTopic ?? "",
       description: item.description ?? "",
     });
+    const matched = findPresetByTypeTopic(item.type, item.mqttTopic);
+    setSelectedPreset(matched?.label || "");
     setModalOpen(true);
   }
 
@@ -96,12 +177,14 @@ export default function DevicePageClient() {
   function openAddModal() {
     setAddMode(true);
     setEditItem(null);
+    const def = devicePresets.find(p => p.label === "Temperature Sensor") || devicePresets[0];
     setForm({
-      name: "",
-      type: "sensor",
-      mqttTopic: "27C45UV/feeds/V1",
-      description: "",
+      name: def.label,
+      type: def.type,
+      mqttTopic: def.topic,
+      description: def.description,
     });
+    setSelectedPreset(def.label);
     setModalOpen(true);
   }
 
@@ -336,48 +419,37 @@ export default function DevicePageClient() {
                   />
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">
-                      Type
-                    </label>
-                    <select
-                      className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
-                      value={form.type}
-                      onChange={(e) =>
-                        setForm({ ...form, type: e.target.value })
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">
+                    Device Preset
+                  </label>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
+                    value={selectedPreset}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      setSelectedPreset(label);
+                      const preset = devicePresets.find(p => p.label === label);
+                      if (preset) {
+                        // Apply type & topic from preset; set name if empty or matches previous preset
+                        setForm(prev => ({
+                          ...prev,
+                          name: preset.label,
+                          type: preset.type,
+                          mqttTopic: preset.topic,
+                          description: preset.description,
+                        }));
                       }
-                    >
-                      <option value="sensor">Sensor</option>
-                      <option value="light">Light</option>
-                      <option value="fan">Fan</option>
-                      <option value="speaker">Speaker</option>
-                      <option value="relay">Relay</option>
-                      <option value="brightness">Brightness</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">
-                      MQTT Topic
-                    </label>
-                    <select
-                      className="w-full rounded-xl border border-gray-200 bg-[#f7f8ff] px-3 py-2 text-sm text-gray-800 outline-none focus:border-[var(--color-purple)] focus:ring-1 focus:ring-[var(--color-purple)]"
-                      value={form.mqttTopic}
-                      onChange={(e) =>
-                        setForm({ ...form, mqttTopic: e.target.value })
-                      }
-                    >
-                      {Array.from(
-                        { length: 20 },
-                        (_, i) => `27C45UV/feeds/V${i + 1}`
-                      ).map((topic) => (
-                        <option key={topic} value={topic}>
-                          {topic}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    }}
+                  >
+                    <option value="" disabled>Select a device...</option>
+                    {devicePresets.map(p => (
+                      <option key={p.label} value={p.label}>{p.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Selecting a preset will auto-fill device name, type, MQTT topic, and a suggested description. You can still adjust these fields.
+                  </p>
                 </div>
 
                 <div>
