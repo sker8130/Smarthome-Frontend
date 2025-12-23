@@ -45,6 +45,13 @@ interface SensorPoint {
   value: number;
 }
 
+type WatchRule = {
+  id: number;
+  topic: string;
+  threshold: number;
+  createdAt: string;
+};
+
 const iconMap: Record<string, string> = {
   fan: "/icons/fan.png",
   light: "/icons/light.png",
@@ -79,6 +86,8 @@ export default function DashboardPage() {
 
   // Fetch data realtime from back-end
   const [dataMap, setDataMap] = useState<Record<string, SensorPoint[]>>({});
+  const [rules, setRules] = useState<WatchRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(true);
 
   // ==========================================
   // Get client token
@@ -95,6 +104,7 @@ export default function DashboardPage() {
   // ==========================================
   // Fetch devices after get token
   // ==========================================
+
   useEffect(() => {
     if (!token) return;
 
@@ -147,9 +157,28 @@ export default function DashboardPage() {
     })();
   }, [token]);
 
+  // ==========================================
+  // Fetch watch rules after get token
+  // ==========================================
+
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      try {
+        const res: any = await apiFetch("/mqtt-watch-rules");
+        if (Array.isArray(res)) setRules(res);
+      } catch (err) {
+        console.error("Fetch watch rules error", err);
+      } finally {
+        setRulesLoading(false);
+      }
+    })();
+  }, [token]);
+
   // ======================================
   // Connect to WebSocket and realtime data
   // ======================================
+
   useEffect(() => {
     if (!token) return;
 
@@ -191,6 +220,7 @@ export default function DashboardPage() {
   // =====================================
   // Toggle devices
   // =====================================
+
   async function toggle(id: string, next?: boolean) {
     if (!token) return;
 
@@ -233,7 +263,15 @@ export default function DashboardPage() {
   // ==========================================
   // Render page
   // ==========================================
-  const brightnessDevices = devices.filter((d) => d.type === "brightness");
+  // Sort devices by name (A → Z) once, then derive each section
+  const devicesByName = [...devices].sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+  );
+
+  const brightnessDevices = devicesByName.filter((d) => d.type === "brightness");
+
+  // Get sensor devices with mqttTopic (only sensors have data)
+  const sensorDevices = devicesByName.filter((d) => d.type === "sensor" && !!d.mqttTopic);
   return (
     <div className="bg-[var(--color-purple)] text-white min-h-screen">
       <DashboardHeader />
@@ -241,7 +279,7 @@ export default function DashboardPage() {
 
         {/* DEVICES */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {devices
+          {devicesByName
             .filter((d) => d.type !== "sensor" && d.type !== "brightness")
             .map((d) => {
               const isRelay = d.type === "relay";
@@ -282,7 +320,7 @@ export default function DashboardPage() {
                     {d.name}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Topic: {d.mqttTopic || "—"}
+                    Type: {d.type || "—"}
                   </p>
                 </article>
               );
@@ -299,8 +337,10 @@ export default function DashboardPage() {
 
         {/* SENSOR CHARTS */}
         <section className="grid grid-cols-1 gap-8">
-          {devices
-            .filter((d) => d.type === "sensor")
+          {[...sensorDevices]
+            .sort((a, b) =>
+              (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+            )
             .map((d) => {
               const arr = d.mqttTopic ? dataMap[d.mqttTopic] || [] : [];
 
@@ -310,8 +350,12 @@ export default function DashboardPage() {
               }));
 
               const latest = arr.length ? arr[arr.length - 1].value : null;
-              const isTemperature = d.name === "Temperature Sensor";
-              const isDanger = isTemperature && latest !== null && latest >= 28;
+
+              // Get thresholds by topic (min threshold if multiple rules)
+              const topic = d.mqttTopic || "";
+              const thresholds = rules.filter((r) => r.topic === topic).map((r) => r.threshold);
+              const minThreshold = thresholds.length ? Math.min(...thresholds) : undefined;
+              const isDanger = minThreshold !== undefined && latest !== null && latest >= minThreshold;
 
               // Dynamic Y domain
               const values = arr.map((p) => p.value);
@@ -320,7 +364,7 @@ export default function DashboardPage() {
 
               // Chart color (normal or danger)
               const lineColor = isDanger ? "#D60000" : "#7B79DA";
-              const gradientId = `sensorGradient-${d.id}`;
+              const gradientId = `sensorGradient-${String(d.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
               return (
                 <div
@@ -349,6 +393,9 @@ export default function DashboardPage() {
                           }`}
                       />
                       {latest !== null ? `Now: ${latest}` : "No data"}
+                      {minThreshold !== undefined && (
+                        <span className="ml-2 opacity-80">Threshold: {minThreshold}</span>
+                      )}
                     </div>
                   </div>
 
